@@ -1,0 +1,12 @@
+name: blueprint-extra-mcp
+description: Blueprint MCP fork with extras -- rules, V1 recipes, relay fixes, iframe support, incognito tab recognition
+version: 1.0.0
+source: fork
+status: ready
+tags:
+  - node
+  - mcp
+  - browser
+  - automation
+maintainer: grobomo
+used_by: []

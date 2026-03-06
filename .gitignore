@@ -3,5 +3,4 @@ logs/
 *.log
 .DS_Store
 Thumbs.db
-blueprint-extra-mcp-rebuilt/
-mcp-blueprint-fork-upstream/
+archive/

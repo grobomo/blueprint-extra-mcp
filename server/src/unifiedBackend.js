@@ -5,6 +5,8 @@
  * Uses Transport abstraction to send commands to extension.
  */
 
+const { SitePlaybooks } = require('./sitePlaybooks');
+
 function debugLog(...args) {
   if (global.DEBUG_MODE) {
     console.error('[UnifiedBackend]', ...args);
@@ -16,6 +18,7 @@ class UnifiedBackend {
     this._config = config;
     this._transport = transport;
     this._lastForcedNodeIds = new Map(); // Cache nodeIds by selector
+    this._sitePlaybooks = new SitePlaybooks();
   }
 
   async initialize(server, clientInfo, statefulBackend) {
@@ -618,6 +621,12 @@ class UnifiedBackend {
         return this._addStatusHeader(errorResponse);
       }
 
+      // Run site-specific pre-action based on current URL
+      const currentUrl = this._statefulBackend?._attachedTab?.url;
+      if (currentUrl && this._transport) {
+        await this._sitePlaybooks.runPreAction(currentUrl, this._transport, name, args);
+      }
+
       let result;
 
       // Route to appropriate handler (pass options for rawResult support)
@@ -716,6 +725,11 @@ class UnifiedBackend {
 
         default:
           throw new Error(`Tool '${name}' not implemented yet`);
+      }
+
+      // Run site-specific post-action
+      if (currentUrl && this._transport) {
+        await this._sitePlaybooks.runPostAction(currentUrl, this._transport, name, args, result);
       }
 
       // For rawResult mode, return result directly without status header
@@ -934,10 +948,24 @@ class UnifiedBackend {
         };
       }
 
+      // Check for available workflows for this URL
+      let workflowHint = '';
+      const tabUrl = result.tab?.url;
+      if (tabUrl && this._sitePlaybooks) {
+        const workflows = this._sitePlaybooks.getWorkflows(tabUrl);
+        if (workflows.length > 0) {
+          workflowHint = `\n\n**Available Workflows (${workflows.length}):**\n`;
+          for (const wf of workflows) {
+            workflowHint += `- \`${wf.id}\` — ${wf.name} (${wf.stepCount} steps)\n`;
+          }
+          workflowHint += `\nUse \`browser_workflows action='get' workflow_id='<id>'\` for step details.`;
+        }
+      }
+
       return {
         content: [{
           type: 'text',
-          text: `### ✅ Tab Attached\n\n**Index:** ${args.index}\n**Title:** ${result.tab?.title}\n**URL:** ${result.tab?.url || 'N/A'}\n\n**Next Steps:**\n- \`browser_take_screenshot\` - Capture visual appearance of the page\n- \`browser_snapshot\` - Get accessibility tree structure for interactions\n- \`browser_extract_content\` - Extract page content as clean markdown`
+          text: `### ✅ Tab Attached\n\n**Index:** ${args.index}\n**Title:** ${result.tab?.title}\n**URL:** ${result.tab?.url || 'N/A'}\n\n**Next Steps:**\n- \`browser_take_screenshot\` - Capture visual appearance of the page\n- \`browser_snapshot\` - Get accessibility tree structure for interactions\n- \`browser_extract_content\` - Extract page content as clean markdown${workflowHint}`
         }],
         isError: false
       };
@@ -1296,9 +1324,14 @@ class UnifiedBackend {
    * Returns: { x, y, warning } or null
    */
   async _findElement(selectorOrObj) {
-    const matches = await this._findAllElements(selectorOrObj);
+    let matches = await this._findAllElements(selectorOrObj);
 
+    // If nothing found in top document, search inside same-origin iframes
     if (matches.length === 0) {
+      const iframeResult = await this._findElementInIframes(selectorOrObj);
+      if (iframeResult) {
+        return iframeResult;
+      }
       return null;
     }
 
@@ -1331,6 +1364,112 @@ class UnifiedBackend {
       y: selectedMatch.y,
       warning: warning
     };
+  }
+
+  /**
+   * Search inside same-origin iframes for an element (2 levels deep).
+   * Called automatically when _findElement finds nothing in the top document.
+   * Uses JS click via Runtime.evaluate since CDP click doesn't work across iframe boundaries.
+   */
+  async _findElementInIframes(selectorOrObj) {
+    // Only support text-based searches in iframes (the common SPA case)
+    let searchText = null;
+    if (typeof selectorOrObj === 'object' && selectorOrObj.type === 'has-text') {
+      searchText = selectorOrObj.searchText;
+    } else if (typeof selectorOrObj === 'string' && selectorOrObj.startsWith('text=')) {
+      searchText = selectorOrObj.slice(5);
+    }
+    if (!searchText) return null;
+
+    try {
+      const result = await this._transport.sendCommand('forwardCDPCommand', {
+        method: 'Runtime.evaluate',
+        params: {
+          expression: `
+            (function() {
+              var searchText = ${JSON.stringify(searchText)};
+              var searchLower = searchText.trim().toLowerCase();
+
+              function findInDoc(doc, iframeName, iframeRect) {
+                try {
+                  var all = doc.querySelectorAll('a, button, span, div, input, label, li');
+                  for (var i = 0; i < all.length; i++) {
+                    var el = all[i];
+                    var directText = '';
+                    for (var n = 0; n < el.childNodes.length; n++) {
+                      if (el.childNodes[n].nodeType === 3) directText += el.childNodes[n].textContent;
+                    }
+                    if (directText.trim().toLowerCase().includes(searchLower)) {
+                      var rect = el.getBoundingClientRect();
+                      var style = (doc.defaultView || window).getComputedStyle(el);
+                      var visible = style.display !== 'none' && style.visibility !== 'hidden' &&
+                                   rect.width > 0 && rect.height > 0;
+                      if (visible) {
+                        // Click via JS (CDP click doesn't cross iframe boundaries)
+                        el.click();
+                        return {
+                          clicked: true,
+                          tag: el.tagName,
+                          text: directText.trim().substring(0, 80),
+                          iframe: iframeName,
+                          x: Math.round((iframeRect ? iframeRect.left : 0) + rect.left + rect.width / 2),
+                          y: Math.round((iframeRect ? iframeRect.top : 0) + rect.top + rect.height / 2)
+                        };
+                      }
+                    }
+                  }
+                } catch(e) { return null; }
+                return null;
+              }
+
+              // Search level 1 iframes
+              var iframes = document.querySelectorAll('iframe');
+              for (var i = 0; i < iframes.length; i++) {
+                try {
+                  var iDoc = iframes[i].contentDocument;
+                  if (!iDoc) continue;
+                  var iRect = iframes[i].getBoundingClientRect();
+                  var name = iframes[i].name || iframes[i].id || 'iframe-' + i;
+                  var found = findInDoc(iDoc, name, iRect);
+                  if (found) return found;
+
+                  // Search level 2 (nested iframes)
+                  var nested = iDoc.querySelectorAll('iframe');
+                  for (var j = 0; j < nested.length; j++) {
+                    try {
+                      var nDoc = nested[j].contentDocument;
+                      if (!nDoc) continue;
+                      var nRect = nested[j].getBoundingClientRect();
+                      var nName = name + ' > ' + (nested[j].name || nested[j].id || 'iframe-' + j);
+                      var nFound = findInDoc(nDoc, nName, {
+                        left: iRect.left + nRect.left,
+                        top: iRect.top + nRect.top
+                      });
+                      if (nFound) return nFound;
+                    } catch(e) {}
+                  }
+                } catch(e) {}
+              }
+              return null;
+            })()
+          `,
+          returnByValue: true
+        }
+      });
+
+      const data = result.result?.value;
+      if (data && data.clicked) {
+        return {
+          x: data.x,
+          y: data.y,
+          warning: `Element found and JS-clicked inside iframe: ${data.iframe} (${data.tag}: "${data.text}")`,
+          jsClicked: true  // Flag that click already happened via JS
+        };
+      }
+    } catch (e) {
+      // Iframe search failed, fall through to null
+    }
+    return null;
   }
 
   /**
@@ -1679,8 +1818,14 @@ class UnifiedBackend {
               throw new Error(errorMsg);
             }
 
-            const { x, y, warning } = elemResult;
+            const { x, y, warning, jsClicked } = elemResult;
             const button = action.button || 'left';
+
+            // If element was already JS-clicked inside an iframe, skip CDP click
+            if (jsClicked) {
+              result = warning || `JS-clicked element inside iframe at (${x}, ${y})`;
+              break;
+            }
 
             // Add visual click effect
             await this._transport.sendCommand('forwardCDPCommand', {
@@ -5339,59 +5484,83 @@ ${clsEmoji} Cumulative Layout Shift (CLS): ${timing.cls?.toFixed(3) || 'N/A'}
             (() => {
               const searchText = ${JSON.stringify(searchText)};
               const searchTextLower = searchText.trim().toLowerCase();
-              const elements = document.querySelectorAll('*');
               const matches = [];
 
-              for (const el of elements) {
-                // Get direct text content (not including children)
-                let directText = '';
-                for (const node of el.childNodes) {
-                  if (node.nodeType === Node.TEXT_NODE) {
-                    directText += node.textContent;
-                  }
-                }
-                directText = directText.trim();
+              // Helper: search a document for matching elements
+              function searchDoc(doc, iframeName) {
+                try {
+                  const elements = doc.querySelectorAll('*');
+                  for (const el of elements) {
+                    let directText = '';
+                    for (const node of el.childNodes) {
+                      if (node.nodeType === Node.TEXT_NODE) {
+                        directText += node.textContent;
+                      }
+                    }
+                    directText = directText.trim();
 
-                // Only match if the direct text contains the search text
-                if (directText.toLowerCase().includes(searchTextLower)) {
-                  // Generate a meaningful selector for this element
-                  let selector = el.tagName.toLowerCase();
+                    if (directText.toLowerCase().includes(searchTextLower)) {
+                      let selector = el.tagName.toLowerCase();
+                      if (el.id) {
+                        selector += '#' + el.id;
+                      } else if (el.className && typeof el.className === 'string') {
+                        const classes = el.className.trim().split(/\\s+/).filter(c => c);
+                        if (classes.length > 0) {
+                          selector += '.' + classes.slice(0, 2).join('.');
+                        }
+                      } else if (el.getAttribute('role')) {
+                        selector += '[role="' + el.getAttribute('role') + '"]';
+                      }
 
-                  // Add ID if present
-                  if (el.id) {
-                    selector += '#' + el.id;
-                  }
-                  // Or add classes (up to 2 most specific)
-                  else if (el.className && typeof el.className === 'string') {
-                    const classes = el.className.trim().split(/\\s+/).filter(c => c);
-                    if (classes.length > 0) {
-                      selector += '.' + classes.slice(0, 2).join('.');
+                      const rect = el.getBoundingClientRect();
+                      const style = doc.defaultView ? doc.defaultView.getComputedStyle(el) : window.getComputedStyle(el);
+                      const visible = style.display !== 'none' &&
+                                     style.visibility !== 'hidden' &&
+                                     style.opacity !== '0' &&
+                                     rect.width > 0 && rect.height > 0;
+
+                      const tag = el.tagName.toLowerCase();
+
+                      matches.push({
+                        selector: iframeName ? 'iframe[name=' + iframeName + '] >> ' + selector : selector,
+                        visible: visible,
+                        text: directText.length > 100 ? directText.substring(0, 100) + '...' : directText,
+                        tag: tag,
+                        x: Math.round(rect.left + rect.width / 2),
+                        y: Math.round(rect.top + rect.height / 2),
+                        iframe: iframeName || null
+                      });
                     }
                   }
-                  // Or add role if present
-                  else if (el.getAttribute('role')) {
-                    selector += '[role="' + el.getAttribute('role') + '"]';
-                  }
+                } catch(e) { /* cross-origin iframe, skip */ }
+              }
 
-                  // Check visibility
-                  const rect = el.getBoundingClientRect();
-                  const style = window.getComputedStyle(el);
-                  const visible = style.display !== 'none' &&
-                                 style.visibility !== 'hidden' &&
-                                 style.opacity !== '0' &&
-                                 rect.width > 0 && rect.height > 0;
+              // Search top-level document
+              searchDoc(document, null);
 
-                  // Get tag name
-                  const tag = el.tagName.toLowerCase();
+              // If no matches in top doc, search inside same-origin iframes (2 levels deep)
+              if (matches.length === 0) {
+                const iframes = document.querySelectorAll('iframe');
+                for (const iframe of iframes) {
+                  try {
+                    const iframeDoc = iframe.contentDocument;
+                    if (!iframeDoc) continue;
+                    const name = iframe.name || iframe.id || 'unnamed';
+                    searchDoc(iframeDoc, name);
 
-                  matches.push({
-                    selector: selector,
-                    visible: visible,
-                    text: directText.length > 100 ? directText.substring(0, 100) + '...' : directText,
-                    tag: tag,
-                    x: Math.round(rect.left + rect.width / 2),
-                    y: Math.round(rect.top + rect.height / 2)
-                  });
+                    // Level 2: nested iframes
+                    if (matches.length === 0) {
+                      const nested = iframeDoc.querySelectorAll('iframe');
+                      for (const nf of nested) {
+                        try {
+                          const nDoc = nf.contentDocument;
+                          if (!nDoc) continue;
+                          const nName = name + ' > ' + (nf.name || nf.id || 'unnamed');
+                          searchDoc(nDoc, nName);
+                        } catch(e) { /* cross-origin */ }
+                      }
+                    }
+                  } catch(e) { /* cross-origin iframe, skip */ }
                 }
               }
 

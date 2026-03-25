@@ -1,0 +1,9 @@
+{
+  "id": "vision-one",
+  "name": "Trend Vision One",
+  "urlPatterns": [
+    "*portal.xdr.trendmicro.com*"
+  ],
+  "iframeStrategy": "named",
+  "notes": "Content renders in named iframes that change per section. Sidebar nav is in top-level DOM. iframe-overlay and MFA modals auto-removed by site playbook."
+}

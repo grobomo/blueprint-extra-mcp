@@ -1,0 +1,65 @@
+{
+  "id": "close-workbench-alert",
+  "name": "Close Workbench Alert",
+  "description": "Change a workbench alert status to Closed with a finding classification and comment",
+  "urlHint": "#/workbench/alerts/",
+  "params": {
+    "finding": { "type": "string", "required": true, "enum": ["True positive", "Benign true positive", "False positive", "Noteworthy", "Other findings"], "description": "Investigation finding" },
+    "subFinding": { "type": "string", "required": false, "description": "Sub-classification (e.g., 'Unusual harmless activity' for FP)" },
+    "comment": { "type": "string", "required": true, "description": "Investigation comment with analyst initials" }
+  },
+  "steps": [
+    {
+      "id": "click_flag",
+      "action": "click_in_iframe",
+      "description": "Click the flag/status icon button (first button in Summary header)",
+      "iframePattern": "__WORKBENCH_CONTAINER",
+      "findElement": { "tag": "button", "index": 0, "description": "First button after Summary heading - flag icon for status change" }
+    },
+    {
+      "id": "select_closed",
+      "action": "click_in_iframe",
+      "description": "Click 'Closed' in the status dropdown",
+      "iframePattern": "__WORKBENCH_CONTAINER",
+      "findElement": { "tag": "button", "text": "Closed" }
+    },
+    {
+      "id": "select_finding",
+      "action": "click_in_iframe",
+      "description": "Select the finding radio button",
+      "iframePattern": "__WORKBENCH_CONTAINER",
+      "findElement": { "tag": "label", "text": "params.finding" }
+    },
+    {
+      "id": "select_sub_finding",
+      "action": "click_in_iframe",
+      "description": "Select sub-finding radio if provided",
+      "iframePattern": "__WORKBENCH_CONTAINER",
+      "findElement": { "tag": "label", "text": "params.subFinding" },
+      "optional": true
+    },
+    {
+      "id": "fill_comment",
+      "action": "fill_in_iframe",
+      "description": "Fill the comment textarea",
+      "iframePattern": "__WORKBENCH_CONTAINER",
+      "findElement": { "tag": "textarea", "index": 0 },
+      "valueFrom": "params.comment",
+      "inputMethod": "nativeSetter"
+    },
+    {
+      "id": "submit",
+      "action": "click_in_iframe",
+      "description": "Click 'Change Status' button",
+      "iframePattern": "__WORKBENCH_CONTAINER",
+      "findElement": { "tag": "button", "text": "Change Status" },
+      "verify": { "modalClosed": true }
+    }
+  ],
+  "elementNotes": {
+    "statusDropdown": "The flag icon is the first <button> inside the workbench iframe. It shows a 3-option dropdown: To do, In progress, Closed.",
+    "findingRadios": "After clicking Closed, a modal appears with radio buttons. Labels are clickable. Selecting 'False positive' shows sub-options: Data noise, Obvious false positive, Unusual harmless activity.",
+    "commentField": "Standard textarea. Use nativeSetter + input/change events for React state sync.",
+    "dynamicIds": "No dynamic IDs. All elements found by tag + text content."
+  }
+}

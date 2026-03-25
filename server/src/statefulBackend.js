@@ -15,6 +15,8 @@ const { UnifiedBackend } = require('./unifiedBackend');
 const { ExtensionServer } = require('./extensionServer');
 const { DirectTransport, ProxyTransport, RelayTransport } = require('./transport');
 const { RelayClient } = require('./relayClient');
+const { ActionValidator } = require('./actionValidator');
+const { ClickRecorder } = require('./clickRecorder');
 const wrappers = require('./wrappers');
 const fs = require('fs');
 const path = require('path');
@@ -50,6 +52,8 @@ class StatefulBackend {
     this._oauthClient = new OAuth2Client({
       authBaseUrl: process.env.AUTH_BASE_URL || 'https://mcp-for-chrome.railsblueprint.com'
     });
+    this._actionValidator = new ActionValidator();
+    this._clickRecorder = new ClickRecorder();
   }
 
   async initialize(server, clientInfo) {
@@ -345,9 +349,69 @@ class StatefulBackend {
       });
     }
 
-    debugLog(`[StatefulBackend] Returning ${connectionTools.length} connection tools + ${browserTools.length} browser tools + ${debugTools.length} debug tools`);
+    // Action validator + workflow tools (always available)
+    const extraTools = [
+      {
+        name: 'browser_diagnostics',
+        description: 'View action validation diagnostics report. Shows tracked failures, root causes, and common patterns. Actions: "report" (default) shows summary, "issues" returns raw data, "clear" resets tracking, "enable"/"disable" toggles validation.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['report', 'issues', 'clear', 'enable', 'disable'],
+              description: 'Action to perform. Default: report'
+            }
+          }
+        },
+        annotations: {
+          title: 'Action validation diagnostics',
+          readOnlyHint: true,
+          destructiveHint: false,
+          openWorldHint: false
+        }
+      },
+      {
+        name: 'browser_workflows',
+        description: 'Site-specific saved workflows with step-by-step element selectors. Actions: "list" shows workflows available for current tab URL, "get" returns full workflow steps, "sites" lists all registered sites, "reload" refreshes from disk, "record" starts/stops click recording to capture element paths for new workflows.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['list', 'get', 'sites', 'reload', 'record'],
+              description: 'Action to perform. Default: list'
+            },
+            workflow_id: {
+              type: 'string',
+              description: 'Workflow ID (for "get" action)'
+            },
+            recording: {
+              type: 'boolean',
+              description: 'Start (true) or stop (false) recording (for "record" action)'
+            },
+            workflow_name: {
+              type: 'string',
+              description: 'Name for the recorded workflow (used when stopping recording)'
+            },
+            workflow_description: {
+              type: 'string',
+              description: 'Description for the recorded workflow'
+            }
+          }
+        },
+        annotations: {
+          title: 'Site workflows and recorder',
+          readOnlyHint: true,
+          destructiveHint: false,
+          openWorldHint: false
+        }
+      }
+    ];
 
-    return [...connectionTools, ...browserTools, ...debugTools];
+    debugLog(`[StatefulBackend] Returning ${connectionTools.length} connection tools + ${browserTools.length} browser tools + ${extraTools.length} extra tools + ${debugTools.length} debug tools`);
+
+    return [...connectionTools, ...browserTools, ...extraTools, ...debugTools];
   }
 
   async callTool(name, rawArguments, options = {}) {
@@ -375,6 +439,12 @@ class StatefulBackend {
 
       case 'scripting':
         return await this._handleScripting(rawArguments, options);
+
+      case 'browser_diagnostics':
+        return this._handleDiagnostics(rawArguments, options);
+
+      case 'browser_workflows':
+        return await this._handleWorkflows(rawArguments, options);
 
       case 'reload_mcp':
         return await this._handleReloadMCP(options);
@@ -419,7 +489,13 @@ class StatefulBackend {
       };
     }
 
-    return await this._activeBackend.callTool(name, rawArguments, options);
+    // Wrap with action validator for automated diagnostics on failure
+    return await this._actionValidator.wrapCall(
+      name,
+      rawArguments,
+      () => this._activeBackend.callTool(name, rawArguments, options),
+      this._activeBackend
+    );
   }
 
   async _handleEnable(args = {}, options = {}) {
@@ -1646,6 +1722,218 @@ class StatefulBackend {
               `You have access to all PRO features including unlimited browser tabs!`
       }]
     };
+  }
+
+  _handleDiagnostics(args = {}, options = {}) {
+    const action = args.action || 'report';
+    let text;
+
+    switch (action) {
+      case 'report':
+        text = this._actionValidator.getReport();
+        break;
+      case 'issues':
+        text = '```json\n' + JSON.stringify(this._actionValidator.getIssues(), null, 2) + '\n```';
+        break;
+      case 'clear':
+        this._actionValidator.clearIssues();
+        text = 'Action validator issues cleared.';
+        break;
+      case 'enable':
+        this._actionValidator.setEnabled(true);
+        text = 'Action validator enabled.';
+        break;
+      case 'disable':
+        this._actionValidator.setEnabled(false);
+        text = 'Action validator disabled.';
+        break;
+      default:
+        text = `Unknown action: ${action}. Valid: report, issues, clear, enable, disable`;
+    }
+
+    const response = { content: [{ type: 'text', text }] };
+    return this._addStatusHeader ? this._addStatusHeader(response) : response;
+  }
+
+  async _handleWorkflows(args = {}, options = {}) {
+    const action = args.action || 'list';
+    const url = this._attachedTab?.url;
+    const playbooks = this._activeBackend?._sitePlaybooks;
+    const effectivePlaybooks = playbooks || (function() {
+      const { SitePlaybooks } = require('./sitePlaybooks');
+      this._fallbackPlaybooks = this._fallbackPlaybooks || new SitePlaybooks();
+      return this._fallbackPlaybooks;
+    }).call(this);
+
+    // Handle record action separately (needs async transport access)
+    if (action === 'record') {
+      return await this._handleRecord(args, effectivePlaybooks, url);
+    }
+
+    return this._handleWorkflowsInner(args, effectivePlaybooks, url);
+  }
+
+  async _handleRecord(args, playbooks, url) {
+    const transport = this._activeBackend?._transport;
+    if (!transport) {
+      return { content: [{ type: 'text', text: 'Browser not connected. Call enable + attach to a tab first.' }], isError: true };
+    }
+
+    if (args.recording === false) {
+      // Stop recording
+      const result = await this._clickRecorder.stop(transport);
+      if (!result.success) {
+        return { content: [{ type: 'text', text: `Stop failed: ${result.message}` }], isError: true };
+      }
+
+      // Generate workflow JSON
+      const wfName = args.workflow_name || 'Recorded Workflow';
+      const wf = this._clickRecorder.toWorkflow(wfName, args.workflow_description);
+
+      let text = `### Recording Stopped\n\n**Captured ${result.eventCount} events**\n\n`;
+      text += '**Steps:**\n';
+      for (let i = 0; i < wf.steps.length; i++) {
+        const step = wf.steps[i];
+        text += `${i + 1}. ${step.description}`;
+        if (step.iframePattern) text += ` (iframe: ${step.iframePattern})`;
+        const best = step.selectorCandidates?.find(s => s.stability === 'high') || step.selectorCandidates?.[0];
+        if (best) text += `\n   Selector: \`${best.selector}\` (${best.stability})`;
+        text += '\n';
+      }
+
+      // Save to workflows directory if we have a matching site
+      const site = playbooks.matchWorkflowSite(url);
+      if (site && args.workflow_name) {
+        const fs = require('fs');
+        const path = require('path');
+        const filename = wf.id + '.json';
+        const filepath = path.join(site._dir, filename);
+        fs.writeFileSync(filepath, JSON.stringify(wf, null, 2));
+        text += `\n**Saved to:** \`${filepath}\``;
+        playbooks.reload();
+      } else {
+        text += '\n**Workflow JSON:**\n```json\n' + JSON.stringify(wf, null, 2) + '\n```';
+      }
+
+      return { content: [{ type: 'text', text }] };
+    }
+
+    // Start recording
+    const result = await this._clickRecorder.start(transport);
+    let text;
+    if (result.success) {
+      text = '### Recording Started\n\n';
+      text += 'Click through your task in the browser. Each click is captured with:\n';
+      text += '- Element tag, text, attributes\n';
+      text += '- Stable selector candidates (data-testid, aria-label, id, role)\n';
+      text += '- Iframe context (if inside an iframe)\n';
+      text += '- Red rectangle highlight on clicked elements\n\n';
+      text += "When done, call `browser_workflows action='record' recording=false workflow_name='My Workflow'` to stop and save.";
+    } else {
+      text = `Recording failed: ${result.message}`;
+    }
+
+    return { content: [{ type: 'text', text }] };
+  }
+
+  _handleWorkflowsInner(args, playbooks, url) {
+    const action = args.action || 'list';
+    let text;
+
+    switch (action) {
+      case 'list': {
+        const workflows = playbooks.getWorkflows(url);
+        if (workflows.length === 0) {
+          text = url
+            ? `No workflows found for: ${url}\n\nUse \`browser_workflows action='sites'\` to see all registered sites.`
+            : 'No tab attached. Attach to a tab first to see matching workflows.';
+        } else {
+          text = `### Available Workflows\n\n**URL:** ${url}\n\n`;
+          text += '| Workflow | Steps | Params | Screenshots |\n';
+          text += '|----------|-------|--------|-------------|\n';
+          for (const wf of workflows) {
+            const paramNames = Object.keys(wf.params).join(', ') || '-';
+            text += `| **${wf.name}** (${wf.id}) | ${wf.stepCount} | ${paramNames} | ${wf.hasScreenshots ? 'Yes' : 'No'} |\n`;
+          }
+          text += '\nUse `browser_workflows action=\'get\' workflow_id=\'<id>\'` for full step details.';
+        }
+        break;
+      }
+
+      case 'get': {
+        const wf = playbooks.getWorkflow(url, args.workflow_id);
+        if (!wf) {
+          text = `Workflow "${args.workflow_id}" not found for current URL.`;
+          break;
+        }
+        text = `### ${wf.name}\n\n${wf.description}\n\n`;
+
+        // Params
+        if (wf.params && Object.keys(wf.params).length > 0) {
+          text += '**Parameters:**\n';
+          for (const [k, v] of Object.entries(wf.params)) {
+            text += `- \`${k}\`${v.required ? ' (required)' : ''}: ${v.description}`;
+            if (v.default) text += ` [default: ${v.default}]`;
+            if (v.enum) text += ` [options: ${v.enum.join(', ')}]`;
+            text += '\n';
+          }
+          text += '\n';
+        }
+
+        // Steps
+        text += '**Steps:**\n\n';
+        for (let i = 0; i < wf.steps.length; i++) {
+          const step = wf.steps[i];
+          text += `${i + 1}. **${step.id}** — ${step.description}\n`;
+          text += `   Action: \`${step.action}\``;
+          if (step.iframePattern) text += ` | Iframe: \`${step.iframePattern}\``;
+          if (step.findElement) text += `\n   Find: ${JSON.stringify(step.findElement)}`;
+          if (step.valueFrom) text += `\n   Value: \`${step.valueFrom}\``;
+          if (step.notes) text += `\n   Note: ${step.notes}`;
+          if (step.optional) text += `\n   _(optional)_`;
+          text += '\n\n';
+        }
+
+        // Element notes
+        if (wf.elementNotes) {
+          text += '**Element Notes:**\n';
+          for (const [k, v] of Object.entries(wf.elementNotes)) {
+            text += `- **${k}:** ${v}\n`;
+          }
+        }
+        break;
+      }
+
+      case 'sites': {
+        const sites = playbooks.list();
+        text = '### Registered Sites\n\n';
+        for (const site of sites) {
+          text += `**${site.name || site.id}** (${site.type})\n`;
+          text += `  Patterns: ${site.patterns.join(', ')}\n`;
+          if (site.workflows) {
+            text += `  Workflows: ${site.workflows.join(', ')}\n`;
+          }
+          text += '\n';
+        }
+        break;
+      }
+
+      case 'reload': {
+        playbooks.reload();
+        text = 'Workflows reloaded from disk.';
+        break;
+      }
+
+      case 'record': {
+        text = 'Record action requires async. Use _handleWorkflows instead.';
+        break;
+      }
+
+      default:
+        text = `Unknown action: ${action}. Valid: list, get, sites, reload, record`;
+    }
+
+    return { content: [{ type: 'text', text }] };
   }
 
   async _handleScripting(args, options = {}) {

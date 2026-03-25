@@ -506,13 +506,14 @@ class StatefulBackend {
       debugLog('[StatefulBackend] Starting authenticated proxy mode');
       return await this._connectToProxy(options);
     } else {
-      // Fork extra: try relay first (default), fall back to primary
-      debugLog('[StatefulBackend] Trying relay mode first (fork extra)...');
+      // Fork extra: relay mode is the default. Only become primary if no primary exists.
+      // This allows multiple Claude sessions to share one browser connection.
+      debugLog('[StatefulBackend] Trying relay mode (default)...');
       const relayResult = await this._tryRelay(options);
       if (relayResult) {
         return relayResult;
       }
-      debugLog('[StatefulBackend] No primary found, becoming primary');
+      debugLog('[StatefulBackend] No primary found, becoming primary (will accept relay clients)');
       return await this._becomePrimary(options);
     }
   }
@@ -714,6 +715,16 @@ class StatefulBackend {
         error.message.includes(`port ${port}`)
       );
 
+      // Fork extra: If port is in use, another Claude session is primary -- auto-connect as relay
+      if (isPortError) {
+        debugLog('[StatefulBackend] Port in use, auto-falling back to relay mode...');
+        const relayResult = await this._tryRelay(options);
+        if (relayResult) {
+          return relayResult;
+        }
+        debugLog('[StatefulBackend] Relay fallback also failed');
+      }
+
       if (options.rawResult) {
         return {
           success: false,
@@ -724,7 +735,7 @@ class StatefulBackend {
       }
 
       const errorMsg = isPortError
-        ? `Port ${port} already in use. Disable MCP in other project or switch to PRO mode: https://blueprint-mcp.railsblueprint.com/pro`
+        ? `Port ${port} already in use and relay connection failed. Check if another Blueprint instance is running.`
         : `### Connection Failed\n\nFailed to start server:\n${error.message}`;
 
       return {

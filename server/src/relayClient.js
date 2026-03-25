@@ -33,6 +33,9 @@ class RelayClient {
     this._pendingRequests = new Map();
     this._connected = false;
     this._reconnectTimer = null;
+    this._reconnectAttempts = 0;
+    this._maxReconnectAttempts = 20;
+    this._autoReconnect = true;
     this._clientId = null;
     this.onReconnect = null;
     this.onTabInfoUpdate = null;
@@ -58,6 +61,7 @@ class RelayClient {
       this._ws.on('open', () => {
         clearTimeout(timeout);
         this._connected = true;
+        this._reconnectAttempts = 0;
         debugLog('Connected to primary as relay client');
 
         // Send handshake
@@ -65,6 +69,9 @@ class RelayClient {
           type: 'relay_handshake',
           clientId: this._clientId || 'relay-' + process.pid
         }));
+
+        // Start keepalive to prevent idle disconnects
+        this._startKeepalive();
 
         resolve();
       });
@@ -76,7 +83,12 @@ class RelayClient {
       this._ws.on('close', () => {
         debugLog('Relay connection closed');
         this._connected = false;
-        this._rejectAllPending('Relay connection closed');
+        // Don't reject pending — reconnect will retry them
+        if (this._autoReconnect) {
+          this._scheduleReconnect();
+        } else {
+          this._rejectAllPending('Relay connection closed');
+        }
       });
 
       this._ws.on('error', (error) => {
@@ -203,6 +215,51 @@ class RelayClient {
   }
 
   /**
+   * Schedule auto-reconnect with exponential backoff
+   */
+  _scheduleReconnect() {
+    if (this._reconnectTimer) return;
+    if (this._reconnectAttempts >= this._maxReconnectAttempts) {
+      debugLog(`Max reconnect attempts (${this._maxReconnectAttempts}) reached, giving up`);
+      this._rejectAllPending('Relay reconnect failed after max attempts');
+      return;
+    }
+
+    const delay = Math.min(1000 * Math.pow(1.5, this._reconnectAttempts), 15000);
+    this._reconnectAttempts++;
+    debugLog(`Reconnecting in ${delay}ms (attempt ${this._reconnectAttempts}/${this._maxReconnectAttempts})`);
+
+    this._reconnectTimer = setTimeout(async () => {
+      this._reconnectTimer = null;
+      try {
+        await this.connect();
+        debugLog('Relay reconnected successfully');
+        this._reconnectAttempts = 0;
+        if (this.onReconnect) this.onReconnect();
+      } catch (e) {
+        debugLog('Reconnect failed:', e.message);
+        if (this._autoReconnect) this._scheduleReconnect();
+      }
+    }, delay);
+  }
+
+  /**
+   * Start keepalive ping to prevent idle disconnects
+   */
+  _startKeepalive(intervalMs = 15000) {
+    if (this._keepaliveTimer) clearInterval(this._keepaliveTimer);
+    this._keepaliveTimer = setInterval(() => {
+      if (this._ws && this._ws.readyState === WebSocket.OPEN) {
+        try {
+          this._ws.ping();
+        } catch (e) {
+          debugLog('Keepalive ping failed:', e.message);
+        }
+      }
+    }, intervalMs);
+  }
+
+  /**
    * Reject all pending requests
    */
   _rejectAllPending(reason) {
@@ -218,9 +275,14 @@ class RelayClient {
   async close() {
     debugLog('Closing relay connection');
     this._connected = false;
+    this._autoReconnect = false;
     if (this._reconnectTimer) {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
+    }
+    if (this._keepaliveTimer) {
+      clearInterval(this._keepaliveTimer);
+      this._keepaliveTimer = null;
     }
     if (this._ws) {
       this._ws.close();

@@ -76,10 +76,31 @@ class RelayTransport extends Transport {
   constructor(relayClient) {
     super();
     this._relayClient = relayClient;
+    this._maxRetries = 3;
   }
 
   async sendCommand(method, params) {
-    return await this._relayClient.sendCommand(method, params);
+    for (let attempt = 0; attempt <= this._maxRetries; attempt++) {
+      try {
+        return await this._relayClient.sendCommand(method, params);
+      } catch (error) {
+        const isDisconnect = error.message && (
+          error.message.includes('Relay not connected') ||
+          error.message.includes('Relay connection closed') ||
+          error.message.includes('Relay reconnect')
+        );
+        if (isDisconnect && attempt < this._maxRetries) {
+          // Wait for auto-reconnect (relayClient handles this)
+          const waitMs = 2000 * (attempt + 1);
+          await new Promise(r => setTimeout(r, waitMs));
+          if (this._relayClient.isConnected()) continue;
+          // Still not connected — wait a bit more
+          await new Promise(r => setTimeout(r, 3000));
+          if (this._relayClient.isConnected()) continue;
+        }
+        throw error;
+      }
+    }
   }
 
   async close() {

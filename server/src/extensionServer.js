@@ -34,6 +34,38 @@ class ExtensionServer {
     this._buildTimestamp = null; // Extension build timestamp
     this._pingInterval = null; // Ping interval to keep connection alive
     this._relayClients = new Set(); // Connected relay clients (fork extra)
+    this._commandQueue = []; // Serialized command queue for multitasking (fork extra)
+    this._commandRunning = false; // Whether a command is currently executing
+  }
+
+  /**
+   * Queue a command for serialized execution (fork extra)
+   * Ensures only one CDP operation runs at a time across all sessions
+   */
+  _enqueueCommand(method, params, timeout) {
+    return new Promise((resolve, reject) => {
+      this._commandQueue.push({ method, params, timeout, resolve, reject });
+      this._processQueue();
+    });
+  }
+
+  async _processQueue() {
+    if (this._commandRunning || this._commandQueue.length === 0) return;
+    this._commandRunning = true;
+
+    const { method, params, timeout, resolve, reject } = this._commandQueue.shift();
+    try {
+      const result = await this._sendCommandDirect(method, params, timeout);
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
+      this._commandRunning = false;
+      // Process next command in queue
+      if (this._commandQueue.length > 0) {
+        this._processQueue();
+      }
+    }
   }
 
   /**
@@ -93,17 +125,28 @@ class ExtensionServer {
         debugLog('Relay client connected');
         this._relayClients.add(ws);
 
+        // Keepalive ping for relay clients (prevents idle disconnect)
+        const relayPing = setInterval(() => {
+          if (ws.readyState === 1) {
+            try { ws.ping(); } catch (e) { /* ignore */ }
+          } else {
+            clearInterval(relayPing);
+          }
+        }, 15000);
+
         ws.on('message', (data) => {
           this._handleRelayMessage(ws, data);
         });
 
         ws.on('close', () => {
           debugLog('Relay client disconnected');
+          clearInterval(relayPing);
           this._relayClients.delete(ws);
         });
 
         ws.on('error', (error) => {
           debugLog('Relay client error:', error);
+          clearInterval(relayPing);
           this._relayClients.delete(ws);
         });
       });
@@ -261,11 +304,28 @@ class ExtensionServer {
   }
 
   /**
-   * Send a command to the extension and wait for response
+   * Send a command to the extension (queued for multitasking)
    */
   async sendCommand(method, params = {}, timeout = 30000) {
+    return this._enqueueCommand(method, params, timeout);
+  }
+
+  /**
+   * Send a command directly to the extension (internal, bypasses queue)
+   */
+  async _sendCommandDirect(method, params = {}, timeout = 30000) {
+    // Auto-wait for extension connection (up to 12s) instead of failing immediately.
+    // Extension auto-reconnects on a 5s cycle, so we need >5s to cover a full reconnect.
     if (!this._extensionWs || this._extensionWs.readyState !== 1) {
-      throw new Error('Extension not connected. Please click the extension icon and click "Connect".');
+      const waitStart = Date.now();
+      const maxWait = 12000;
+      while (Date.now() - waitStart < maxWait) {
+        if (this._extensionWs && this._extensionWs.readyState === 1) break;
+        await new Promise(r => setTimeout(r, 250));
+      }
+      if (!this._extensionWs || this._extensionWs.readyState !== 1) {
+        throw new Error('Extension not connected after waiting 12s. The Chrome extension may need to be reloaded (chrome://extensions > Blueprint > reload).');
+      }
     }
 
     const id = Math.random().toString(36).substring(7);
@@ -341,50 +401,29 @@ class ExtensionServer {
         return;
       }
 
-      // Forward command to extension
+      // Forward command to extension via queue (fork extra: serialized for multitasking)
       if (message.method === 'relay_forward') {
         const { targetMethod, targetParams } = message.params || {};
         const relayId = message.id;
 
-        if (!this._extensionWs || this._extensionWs.readyState !== 1) {
-          relayWs.send(JSON.stringify({
-            jsonrpc: '2.0',
-            id: relayId,
-            error: { code: -32002, message: 'Extension not connected' }
-          }));
-          return;
-        }
+        debugLog('Relay queuing command:', targetMethod);
 
-        // Generate internal ID for the extension request
-        const internalId = 'fwd-' + Math.random().toString(36).substring(7);
-
-        // Set up response routing back to relay client
-        this._pendingRequests.set(internalId, {
-          resolve: (result) => {
+        // Use the command queue so relay commands are serialized with primary commands
+        this._enqueueCommand(targetMethod, targetParams, 30000)
+          .then((result) => {
             relayWs.send(JSON.stringify({
               jsonrpc: '2.0',
               id: relayId,
               result
             }));
-          },
-          reject: (error) => {
+          })
+          .catch((error) => {
             relayWs.send(JSON.stringify({
               jsonrpc: '2.0',
               id: relayId,
               error: { code: -32003, message: error.message }
             }));
-          }
-        });
-
-        // Forward to extension
-        const fwdMessage = {
-          jsonrpc: '2.0',
-          id: internalId,
-          method: targetMethod,
-          params: targetParams
-        };
-        debugLog('Relay forwarding to extension:', targetMethod);
-        this._extensionWs.send(JSON.stringify(fwdMessage));
+          });
         return;
       }
     } catch (error) {

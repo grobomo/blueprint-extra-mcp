@@ -6,8 +6,8 @@ function detectBrowserName() {
   const manifest = browserAPI.runtime.getManifest();
   const manifestName = manifest.name || '';
 
-  // Extract browser name from "Blueprint MCP for X" pattern
-  const match = manifestName.match(/Blueprint MCP for (\w+)/);
+  // Extract browser name from "Blueprint Extra MCP for X" pattern
+  const match = manifestName.match(/Blueprint Extra MCP for (\w+)/);
   if (match && match[1]) {
     return match[1];
   }
@@ -24,7 +24,7 @@ function log(...args) {
   if (state && state.debugMode) {
     const now = new Date();
     const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
-    console.log(`[Blueprint MCP for ${browserName}] ${time}`, ...args);
+    console.log(`[Blueprint Extra MCP for ${browserName}] ${time}`, ...args);
   }
 }
 
@@ -32,7 +32,7 @@ function log(...args) {
 function logAlways(...args) {
   const now = new Date();
   const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
-  console.log(`[Blueprint MCP for ${browserName}] ${time}`, ...args);
+  console.log(`[Blueprint Extra MCP for ${browserName}] ${time}`, ...args);
 }
 
 // Constants (matching Chrome's config.ts)
@@ -343,8 +343,8 @@ function renderSettings() {
   return `
     <div class="popup-container">
       <div class="popup-header">
-        <img src="/icons/icon-32.png" alt="Blueprint MCP" class="header-icon" />
-        <h1>Blueprint MCP<span class="version-label">v${state.version}</span></h1>
+        <img src="/icons/icon-32.png" alt="Blueprint Extra MCP" class="header-icon" />
+        <h1>Blueprint Extra MCP<span class="version-label">v${state.version}</span></h1>
       </div>
 
       <div class="popup-content">
@@ -449,8 +449,8 @@ function renderMain() {
   return `
     <div class="popup-container">
       <div class="popup-header">
-        <img src="/icons/icon-32.png" alt="Blueprint MCP" class="header-icon" />
-        <h1>Blueprint MCP<span class="version-label">v${state.version}</span></h1>
+        <img src="/icons/icon-32.png" alt="Blueprint Extra MCP" class="header-icon" />
+        <h1>Blueprint Extra MCP<span class="version-label">v${state.version}</span></h1>
       </div>
 
       <div class="popup-content">

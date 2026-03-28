@@ -1,0 +1,9 @@
+{
+  "id": "sharepoint",
+  "name": "SharePoint OneDrive",
+  "urlPatterns": [
+    "*-my.sharepoint.com*",
+    "*.sharepoint.com*"
+  ],
+  "notes": "SharePoint Stream pages for Teams recordings. Transcript panel loads below viewport when Transcript button is clicked. Download button has a dropdown with .docx and .vtt options."
+}

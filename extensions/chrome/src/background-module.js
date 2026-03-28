@@ -53,16 +53,16 @@ chrome.storage.local.set({
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   // Check if tabHandlers is initialized yet
   if (!tabHandlers) {
-    console.error('[DEBUG tabs.onUpdated] tabHandlers not initialized yet, skipping');
+    console.log('[DEBUG tabs.onUpdated] tabHandlers not initialized yet, skipping');
     return;
   }
 
   const attachedTabId = tabHandlers.getAttachedTabId();
 
   // Log EVERY event with full details
-  console.error('[DEBUG tabs.onUpdated] ⚡ FIRED! tabId:', tabId, 'attached:', attachedTabId, 'match:', tabId === attachedTabId);
-  console.error('[DEBUG tabs.onUpdated] changeInfo:', JSON.stringify(changeInfo));
-  console.error('[DEBUG tabs.onUpdated] tab.url:', tab.url);
+  console.log('[DEBUG tabs.onUpdated] ⚡ FIRED! tabId:', tabId, 'attached:', attachedTabId, 'match:', tabId === attachedTabId);
+  console.log('[DEBUG tabs.onUpdated] changeInfo:', JSON.stringify(changeInfo));
+  console.log('[DEBUG tabs.onUpdated] tab.url:', tab.url);
 
   // Write to storage for debugging - log EVERY onUpdated event
   await chrome.storage.local.set({
@@ -76,9 +76,9 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   // Debug: Log every URL change
   if (changeInfo.url) {
-    console.error('[DEBUG tabs.onUpdated] Tab', tabId, 'URL changed to:', changeInfo.url);
-    console.error('[DEBUG tabs.onUpdated] Attached tab ID:', attachedTabId);
-    console.error('[DEBUG tabs.onUpdated] Match:', tabId === attachedTabId);
+    console.log('[DEBUG tabs.onUpdated] Tab', tabId, 'URL changed to:', changeInfo.url);
+    console.log('[DEBUG tabs.onUpdated] Attached tab ID:', attachedTabId);
+    console.log('[DEBUG tabs.onUpdated] Match:', tabId === attachedTabId);
 
     // Write to storage for debugging
     await chrome.storage.local.set({
@@ -362,6 +362,26 @@ chrome.debugger.onDetach.addListener((source, reason) => {
   }
 });
 
+// Fork extra: Auto-detach debugger after idle to allow multitasking between sessions
+let debuggerIdleTimer = null;
+const DEBUGGER_IDLE_TIMEOUT = 3000; // 3 seconds idle before auto-detach
+
+function resetDebuggerIdleTimer() {
+  if (debuggerIdleTimer) clearTimeout(debuggerIdleTimer);
+  debuggerIdleTimer = setTimeout(async () => {
+    if (debuggerAttached && currentDebuggerTabId) {
+      try {
+        await chrome.debugger.detach({ tabId: currentDebuggerTabId });
+        logger.log(`[Background] Auto-detached debugger from tab ${currentDebuggerTabId} (idle timeout)`);
+      } catch (e) {
+        logger.log(`[Background] Auto-detach failed: ${e.message}`);
+      }
+      debuggerAttached = false;
+      currentDebuggerTabId = null;
+    }
+  }, DEBUGGER_IDLE_TIMEOUT);
+}
+
 // Helper function to ensure debugger is attached to current tab
 async function ensureDebuggerAttached() {
   const attachedTabId = tabHandlers.getAttachedTabId();
@@ -372,6 +392,7 @@ async function ensureDebuggerAttached() {
 
   // If debugger is already attached to this tab, we're good
   if (debuggerAttached && currentDebuggerTabId === attachedTabId) {
+    resetDebuggerIdleTimer();
     return;
   }
 
@@ -415,6 +436,9 @@ async function ensureDebuggerAttached() {
     } catch (runtimeError) {
       logger.log(`[Background] Warning: Could not enable Runtime domain: ${runtimeError.message}`);
     }
+
+    // Start idle timer for auto-detach (fork extra: multitasking support)
+    resetDebuggerIdleTimer();
   } catch (error) {
     debuggerAttached = false;
     currentDebuggerTabId = null;
@@ -425,6 +449,9 @@ async function ensureDebuggerAttached() {
 // Handle CDP commands from MCP server
 async function handleCDPCommand(cdpMethod, cdpParams) {
   const attachedTabId = tabHandlers.getAttachedTabId();
+
+  // Reset idle timer on every CDP command (fork extra: multitasking)
+  resetDebuggerIdleTimer();
 
   logger.log(`[Background] handleCDPCommand called: ${cdpMethod} tab: ${attachedTabId}`);
 
@@ -1485,42 +1512,98 @@ async function handleMouseEvent(params) {
   }
 
   // Step 3: Perform the click
+  // Use CDP Input.dispatchMouseEvent for trusted events (works across iframes)
+  if (debuggerAttached && currentDebuggerTabId === attachedTabId) {
+    try {
+      const cdpType = type === 'mousePressed' ? 'mousePressed' : type === 'mouseReleased' ? 'mouseReleased' : 'mouseMoved';
+      const cdpButton = button === 'left' ? 'left' : button === 'right' ? 'right' : 'middle';
+
+      await chrome.debugger.sendCommand(
+        { tabId: attachedTabId },
+        'Input.dispatchMouseEvent',
+        { type: cdpType, x: x, y: y, button: cdpButton, clickCount: cdpType === 'mouseReleased' ? 1 : 0 }
+      );
+
+      // Synthesize click on mouseReleased
+      if (type === 'mouseReleased' && lastMouseDown && lastMouseDown.x === x && lastMouseDown.y === y) {
+        // CDP mouseReleased with clickCount=1 already triggers click in the correct frame
+      }
+
+      // Fall through to side effect detection below
+      const results = [{ result: { success: true, element: 'CDP', eventType: cdpType, iframeDepth: 'auto' } }];
+      // Skip executeScript path
+      if (type === 'mouseReleased') { lastMouseDown = null; }
+
+      // Step 4: Detect side effects (same logic)
+      if (shouldDetectSideEffects && tabCreatedListener) {
+        chrome.tabs.onCreated.removeListener(tabCreatedListener);
+      }
+      return results[0].result;
+    } catch (cdpError) {
+      logger.log(`[Background] CDP mouse event failed, falling back to executeScript: ${cdpError.message}`);
+      // Fall through to executeScript path below
+    }
+  }
+
   const results = await browserAdapter.executeScript(attachedTabId, {
     world: 'MAIN',  // Must use MAIN world for events to trigger handlers properly
     func: (eventType, x, y, buttonIndex, buttons, shouldSynthesizeClick) => {
-      const el = document.elementFromPoint(x, y);
-      if (!el) {
+      // Resolve element at coordinates, recursing into same-origin iframes
+      let targetEl = document.elementFromPoint(x, y);
+      let targetX = x;
+      let targetY = y;
+      let targetView = window;
+      let depth = 0;
+
+      while (targetEl && targetEl.tagName === 'IFRAME' && depth < 3) {
+        try {
+          const iframeDoc = targetEl.contentDocument;
+          if (!iframeDoc) break; // cross-origin, can't recurse
+          const iframeRect = targetEl.getBoundingClientRect();
+          targetX = x - iframeRect.x;
+          targetY = y - iframeRect.y;
+          targetView = targetEl.contentWindow;
+          const innerEl = iframeDoc.elementFromPoint(targetX, targetY);
+          if (!innerEl) break;
+          targetEl = innerEl;
+          depth++;
+        } catch (e) {
+          break; // cross-origin iframe
+        }
+      }
+
+      if (!targetEl) {
         return { success: false, error: 'No element at coordinates' };
       }
 
-      // Dispatch the mouse event
+      // Dispatch the mouse event in the correct frame context
       const event = new MouseEvent(eventType, {
-        view: window,
+        view: targetView,
         bubbles: true,
         cancelable: true,
-        clientX: x,
-        clientY: y,
+        clientX: targetX,
+        clientY: targetY,
         button: buttonIndex,
         buttons: buttons
       });
 
-      el.dispatchEvent(event);
+      targetEl.dispatchEvent(event);
 
       // If this is mouseup and we should synthesize a click, dispatch click event
       if (shouldSynthesizeClick && eventType === 'mouseup') {
         const clickEvent = new MouseEvent('click', {
-          view: window,
+          view: targetView,
           bubbles: true,
           cancelable: true,
-          clientX: x,
-          clientY: y,
+          clientX: targetX,
+          clientY: targetY,
           button: buttonIndex,
           buttons: 0  // No buttons pressed during click event
         });
-        el.dispatchEvent(clickEvent);
+        targetEl.dispatchEvent(clickEvent);
       }
 
-      return { success: true, element: el.tagName, eventType: eventType };
+      return { success: true, element: targetEl.tagName, eventType: eventType, iframeDepth: depth };
     },
     args: [
       domEventType,

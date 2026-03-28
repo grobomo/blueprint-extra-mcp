@@ -1,0 +1,35 @@
+{
+  "id": "download-transcript-vtt",
+  "name": "Download Transcript as VTT",
+  "description": "Download the Teams meeting transcript as a .vtt file from a SharePoint Stream recording page",
+  "urlHint": "stream.aspx",
+  "params": {},
+  "steps": [
+    {
+      "id": "open_transcript_panel",
+      "action": "evaluate",
+      "description": "Click the Transcript button in the bottom nav bar to load the transcript panel (loads below viewport)",
+      "expression": "(function() { var btns = document.querySelectorAll('button'); for (var i = 0; i < btns.length; i++) { var t = btns[i].textContent.trim(); if (t === 'Transcript' && t !== 'Read transcript') { btns[i].click(); return 'clicked Transcript'; } } return 'Transcript button not found'; })()"
+    },
+    {
+      "id": "click_download",
+      "action": "evaluate",
+      "description": "Click the Download button in the transcript panel to open format dropdown",
+      "expression": "(function() { var btn = document.getElementById('downloadTranscript'); if (btn) { btn.click(); return 'clicked downloadTranscript'; } return 'downloadTranscript button not found'; })()"
+    },
+    {
+      "id": "select_vtt_format",
+      "action": "evaluate",
+      "description": "Select 'Download as .vtt' from the dropdown menu",
+      "expression": "(function() { var items = document.querySelectorAll('[role=menuitem], [role=option], .ms-ContextualMenu-item, .ms-ContextualMenu-link'); for (var i = items.length - 1; i >= 0; i--) { if (items[i].textContent.trim() === 'Download as .vtt') { items[i].click(); return 'clicked Download as .vtt'; } } return '.vtt option not found'; })()"
+    }
+  ],
+  "elementNotes": {
+    "transcriptButton": "Bottom nav bar has: Trim, Transcript, Interactivity, Notes, Comments, Video settings, Analytics. The Transcript button may share a name with 'Read transcript' overlay on the video — filter by exact match.",
+    "downloadButton": "Has id='downloadTranscript'. Appears in transcript panel which loads below viewport at ~y:632. Has a dropdown with 'Download as .docx' and 'Download as .vtt'.",
+    "vttDownload": "VTT downloads to browser's default Downloads folder. Filename is the meeting name (without timestamp suffix), e.g. 'Meeting Name.vtt'. May get (1) suffix if already exists.",
+    "timing": "Transcript panel loads async after clicking Transcript button. Allow 1-2 seconds between step 1 and step 2. The download dropdown appears immediately after clicking Download.",
+    "tabStrategy": "CRITICAL: Always open each recording in a NEW tab (browser_tabs action='new'). Reusing/navigating within an existing SharePoint Stream tab causes the SPA to get stuck on a loading spinner. Close the tab after download completes.",
+    "transcriptFallback": "The first step uses exact match 'Transcript'. If not found, fallback searches for any button containing 'Transcript' excluding 'Read transcript'. The button text may have extra whitespace from React rendering."
+  }
+}

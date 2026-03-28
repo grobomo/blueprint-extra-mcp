@@ -81,14 +81,23 @@ export class TabHandlers {
    * Returns list of all tabs from all windows
    */
   async getTabs() {
-    // Get all tabs from all windows
-    const windows = await this.browser.windows.getAll({ populate: true });
+    // Use chrome.tabs.query({}) to get ALL tabs including incognito
+    // windows.getAll() misses incognito windows in MV3 spanning mode
+    const allTabs = await this.browser.tabs.query({});
     const tabs = [];
-    let tabIndex = 0;
 
-    windows.forEach(window => {
-      window.tabs.forEach(tab => {
-        // Check if tab is automatable (not about:, moz-extension:, chrome:, etc.)
+    // Group by window for consistent ordering
+    const windowMap = new Map();
+    allTabs.forEach(tab => {
+      if (!windowMap.has(tab.windowId)) windowMap.set(tab.windowId, []);
+      windowMap.get(tab.windowId).push(tab);
+    });
+
+    let tabIndex = 0;
+    for (const [windowId, windowTabs] of windowMap) {
+      // Sort tabs within window by their index
+      windowTabs.sort((a, b) => a.index - b.index);
+      for (const tab of windowTabs) {
         const isAutomatable = tab.url &&
           !['about:', 'moz-extension:', 'chrome:', 'chrome-extension:'].some(scheme =>
             tab.url.startsWith(scheme)
@@ -96,17 +105,18 @@ export class TabHandlers {
 
         tabs.push({
           id: tab.id,
-          windowId: window.id,
+          windowId: windowId,
           title: tab.title,
           url: tab.url,
           active: tab.active,
+          incognito: tab.incognito || false,
           index: tabIndex,
           automatable: isAutomatable
         });
 
         tabIndex++;
-      });
-    });
+      }
+    }
 
     return { tabs };
   }

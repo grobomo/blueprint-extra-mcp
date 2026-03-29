@@ -1,0 +1,8 @@
+{
+  "id": "rone",
+  "name": "RONE Elastic Runtime",
+  "urlPatterns": [
+    "*portal.rdsec.trendmicro.com*"
+  ],
+  "notes": "RONE (RDSec One) portal for Elastic Runtime K8s namespaces. Kubeconfig tokens expire every 8 hours. Actions dropdown is in a fixed-right table cell, not visible in viewport — must click via JS."
+}

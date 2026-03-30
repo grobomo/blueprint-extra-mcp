@@ -17,6 +17,8 @@ const { DirectTransport, ProxyTransport, RelayTransport } = require('./transport
 const { RelayClient } = require('./relayClient');
 const { ActionValidator } = require('./actionValidator');
 const { ClickRecorder } = require('./clickRecorder');
+const { ActivityTracker } = require('./activityTracker');
+const { ActivityReporter } = require('./activityReporter');
 const wrappers = require('./wrappers');
 const fs = require('fs');
 const path = require('path');
@@ -49,6 +51,7 @@ class StatefulBackend {
     });
     this._actionValidator = new ActionValidator();
     this._clickRecorder = new ClickRecorder();
+    this._activityTracker = new ActivityTracker();
   }
 
   async initialize(server, clientInfo) {
@@ -401,6 +404,30 @@ class StatefulBackend {
           destructiveHint: false,
           openWorldHint: false
         }
+      },
+      {
+        name: 'browser_activity',
+        description: 'Track user activity on web pages. Actions: "start" begins tracking (clicks, hovers, scroll, dwell, navigation), "stop" ends tracking and returns event summary, "report" generates HTML dashboard, "status" checks if tracking is active.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['start', 'stop', 'report', 'status'],
+              description: 'Action to perform. Default: status'
+            },
+            output_path: {
+              type: 'string',
+              description: 'File path for HTML report (for "report" action). If omitted, returns HTML as text.'
+            }
+          }
+        },
+        annotations: {
+          title: 'User activity tracker',
+          readOnlyHint: true,
+          destructiveHint: false,
+          openWorldHint: false
+        }
       }
     ];
 
@@ -440,6 +467,9 @@ class StatefulBackend {
 
       case 'browser_workflows':
         return await this._handleWorkflows(rawArguments, options);
+
+      case 'browser_activity':
+        return await this._handleActivity(rawArguments, options);
 
       case 'reload_mcp':
         return await this._handleReloadMCP(options);
@@ -1829,6 +1859,68 @@ class StatefulBackend {
     }
 
     return { content: [{ type: 'text', text }] };
+  }
+
+  async _handleActivity(args) {
+    const action = args.action || 'status';
+    const transport = this._activeBackend?._transport;
+
+    switch (action) {
+      case 'start': {
+        if (!transport) {
+          return { content: [{ type: 'text', text: 'Browser not connected. Call enable + attach to a tab first.' }], isError: true };
+        }
+        const result = await this._activityTracker.start(transport);
+        return { content: [{ type: 'text', text: result.success ? `### Activity Tracking Started\n\nCapturing: clicks, hovers (>500ms), scroll depth, page dwell time, navigation paths.\n\nCall \`browser_activity action='stop'\` when done.` : `Failed: ${result.message}` }], isError: !result.success };
+      }
+
+      case 'stop': {
+        if (!transport) {
+          return { content: [{ type: 'text', text: 'Browser not connected.' }], isError: true };
+        }
+        const result = await this._activityTracker.stop(transport);
+        if (!result.success) {
+          return { content: [{ type: 'text', text: `Failed: ${result.message}` }], isError: true };
+        }
+        const summary = result.summary;
+        let text = `### Activity Tracking Stopped\n\n`;
+        text += `**${result.eventCount} events** captured\n\n`;
+        text += `| Metric | Count |\n|--------|-------|\n`;
+        text += `| Clicks | ${summary.clicks} |\n`;
+        text += `| Hovers (>500ms) | ${summary.hovers} |\n`;
+        text += `| Page visits | ${summary.pageVisits} |\n`;
+        text += `| Navigations | ${summary.navigations} |\n`;
+        text += `| Scroll events | ${summary.scrollEvents} |\n\n`;
+        if (summary.topPages?.length) {
+          text += `**Top pages:**\n`;
+          for (const p of summary.topPages.slice(0, 5)) {
+            text += `- ${p.url} (${p.visits} visits)\n`;
+          }
+        }
+        text += `\nCall \`browser_activity action='report' output_path='report.html'\` for a full HTML dashboard.`;
+        this._lastActivityEvents = result.events;
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'report': {
+        const events = this._lastActivityEvents;
+        if (!events || events.length === 0) {
+          return { content: [{ type: 'text', text: 'No activity data. Run start/stop first.' }], isError: true };
+        }
+        const reporter = new ActivityReporter(events);
+        if (args.output_path) {
+          const resolved = path.resolve(args.output_path);
+          reporter.generateHTML(resolved);
+          return { content: [{ type: 'text', text: `HTML report saved to: ${resolved}` }] };
+        }
+        const summary = reporter.summarize();
+        return { content: [{ type: 'text', text: '```json\n' + JSON.stringify(summary, null, 2) + '\n```' }] };
+      }
+
+      case 'status':
+      default:
+        return { content: [{ type: 'text', text: `Activity tracker: ${this._activityTracker.isRecording ? '**recording**' : 'idle'}\nLast session events: ${this._lastActivityEvents?.length || 0}` }] };
+    }
   }
 
   _handleWorkflowsInner(args, playbooks, url) {

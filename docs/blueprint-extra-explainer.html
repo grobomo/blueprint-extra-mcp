@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blueprint Extra MCP - Explainer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; padding: 2rem; }
+  h1 { text-align: center; font-size: 2rem; margin-bottom: 0.5rem; color: #e6edf3; }
+  .subtitle { text-align: center; color: #8b949e; margin-bottom: 2.5rem; font-size: 1.1rem; }
+  .panel { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; }
+  .panel-title { color: #58a6ff; font-size: 1.3rem; font-weight: 600; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .split { display: flex; gap: 1.5rem; }
+  .side { flex: 1; padding: 1.2rem; border-radius: 8px; }
+  .side.before { background: #1c1008; border: 1px solid #6e3a00; }
+  .side.after { background: #0d1a12; border: 1px solid #238636; }
+  .side h3 { margin-bottom: 0.8rem; font-size: 1rem; }
+  .side.before h3 { color: #f0883e; }
+  .side.after h3 { color: #3fb950; }
+  .side ul { list-style: none; padding: 0; }
+  .side li { padding: 0.3rem 0; }
+  .side.before li::before { content: "[X] "; color: #f85149; font-family: monospace; }
+  .side.after li::before { content: "[+] "; color: #3fb950; font-family: monospace; }
+  .flow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.5rem; padding: 1rem 0; }
+  .flow-box { padding: 0.8rem 1.2rem; border-radius: 8px; border: 2px solid; text-align: center; min-width: 140px; }
+  .flow-arrow { color: #8b949e; font-size: 1.5rem; font-family: monospace; }
+  .box.claude { border-color: #da7756; background: #1a1208; color: #f0c8a0; }
+  .box.core { border-color: #58a6ff; background: #0d1926; color: #a8d4ff; }
+  .box.backend { border-color: #3fb950; background: #0d1a12; color: #7ee787; }
+  .box.http { border-color: #d29922; background: #1a1508; color: #e3b341; }
+  .box.config { border-color: #8957e5; background: #170e26; color: #bc8cff; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+  .card { background: #21262d; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; }
+  .card h4 { color: #58a6ff; margin-bottom: 0.5rem; }
+  .card code { background: #161b22; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.85rem; color: #e6edf3; }
+  .card p { color: #8b949e; font-size: 0.9rem; }
+  .cmd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.8rem; }
+  .cmd { background: #21262d; border: 1px solid #30363d; border-radius: 6px; padding: 0.8rem; }
+  .cmd code { color: #79c0ff; font-size: 0.9rem; }
+  .cmd p { color: #8b949e; font-size: 0.85rem; margin-top: 0.3rem; }
+  .benefit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+  .benefit { text-align: center; padding: 1.2rem; background: #21262d; border-radius: 8px; border: 1px solid #30363d; }
+  .benefit .icon { font-size: 1.8rem; margin-bottom: 0.5rem; font-family: monospace; color: #58a6ff; }
+  .benefit h4 { color: #e6edf3; margin-bottom: 0.4rem; }
+  .benefit p { color: #8b949e; font-size: 0.85rem; }
+  .state-row { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; flex-wrap: wrap; }
+  .state-box { padding: 0.4rem 0.8rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; }
+  .state-passive { background: #21262d; border: 1px solid #30363d; color: #8b949e; }
+  .state-active { background: #0d1a12; border: 1px solid #238636; color: #3fb950; }
+  .state-connected { background: #0d1926; border: 1px solid #1f6feb; color: #58a6ff; }
+  .state-arrow { color: #8b949e; font-family: monospace; }
+  .state-label { color: #8b949e; font-size: 0.8rem; font-style: italic; }
+  @media (max-width: 700px) { .split { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<h1>Blueprint Extra MCP</h1>
+<p class="subtitle">Browser automation for AI assistants -- using your real browser, real profile, real sessions</p>
+
+<!-- THE PROBLEM -->
+<div class="panel">
+  <div class="panel-title">[!] The Problem</div>
+  <div class="split">
+    <div class="side before">
+      <h3>Without Blueprint</h3>
+      <ul>
+        <li>Playwright/Puppeteer launch headless browsers</li>
+        <li>Must re-authenticate every session</li>
+        <li>Bot fingerprints get blocked by sites</li>
+        <li>No access to your extensions or cookies</li>
+        <li>Iframe content invisible to AI snapshots</li>
+        <li>One AI session per browser instance</li>
+      </ul>
+    </div>
+    <div class="side after">
+      <h3>With Blueprint Extra</h3>
+      <ul>
+        <li>Uses your real Chrome/Firefox/Edge browser</li>
+        <li>Already logged in everywhere</li>
+        <li>Real fingerprint -- not flagged as bot</li>
+        <li>Your extensions and cookies work</li>
+        <li>Same-origin iframe content in snapshots</li>
+        <li>Multiple AI sessions share one browser</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS -->
+<div class="panel">
+  <div class="panel-title">[~] How It Works</div>
+  <div class="flow">
+    <div class="flow-box box claude">AI Assistant<br><small>Claude / GPT / Cursor</small></div>
+    <div class="flow-arrow">--stdio--&gt;</div>
+    <div class="flow-box box core">MCP Server<br><small>run-server.js</small></div>
+    <div class="flow-arrow">--ws:5555--&gt;</div>
+    <div class="flow-box box backend">Extension<br><small>Chrome MV3</small></div>
+    <div class="flow-arrow">--CDP--&gt;</div>
+    <div class="flow-box box http">Your Browser<br><small>Real profile</small></div>
+  </div>
+  <div style="margin-top: 1rem;">
+    <div class="panel-title" style="font-size: 1rem;">[*] Multi-Session Relay</div>
+    <div class="flow">
+      <div class="flow-box box claude" style="min-width: 100px;">Session A<br><small>primary</small></div>
+      <div class="flow-arrow">--&gt;</div>
+      <div class="flow-box box core" style="min-width: 120px; border-width: 3px;">Port 5555<br><small>multiplexer</small></div>
+      <div class="flow-arrow">&lt;--</div>
+      <div class="flow-box box claude" style="min-width: 100px;">Session B<br><small>relay</small></div>
+    </div>
+    <p style="color: #8b949e; text-align: center; font-size: 0.85rem; margin-top: 0.5rem;">First instance binds as primary. Additional instances auto-relay through it -- zero config.</p>
+  </div>
+</div>
+
+<!-- CONNECTION STATES -->
+<div class="panel">
+  <div class="panel-title">[=] Connection States</div>
+  <div class="state-row">
+    <span class="state-box state-passive">passive</span>
+    <span class="state-arrow">--enable()--&gt;</span>
+    <span class="state-box state-active">active</span>
+    <span class="state-label">(free mode: local extension)</span>
+  </div>
+  <div class="state-row">
+    <span class="state-box state-passive">passive</span>
+    <span class="state-arrow">--enable()--&gt;</span>
+    <span class="state-box state-connected">connected</span>
+    <span class="state-label">(PRO mode: single browser on relay)</span>
+  </div>
+  <div class="state-row">
+    <span class="state-box state-passive">passive</span>
+    <span class="state-arrow">--enable()--&gt;</span>
+    <span class="state-box state-connected">auth_waiting</span>
+    <span class="state-arrow">--browser_connect()--&gt;</span>
+    <span class="state-box state-active">active</span>
+    <span class="state-label">(PRO: multiple browsers)</span>
+  </div>
+</div>
+
+<!-- FILES / CONFIG -->
+<div class="panel">
+  <div class="panel-title">[#] Key Files</div>
+  <div class="cards">
+    <div class="card">
+      <h4>run-server.js</h4>
+      <p>Entry point. Launches MCP stdio server or relay client based on port availability.</p>
+    </div>
+    <div class="card">
+      <h4>server/src/unifiedBackend.js</h4>
+      <p>All 20+ browser tool handlers. <strong style="color:#e6edf3;">This is where fixes go.</strong> Iframe search, click fallbacks.</p>
+    </div>
+    <div class="card">
+      <h4>server/src/statefulBackend.js</h4>
+      <p>Connection state machine. Manages passive/active/connected transitions.</p>
+    </div>
+    <div class="card">
+      <h4>server/src/extensionServer.js</h4>
+      <p>WebSocket server on port 5555. Multiplexes relay clients to single extension.</p>
+    </div>
+    <div class="card">
+      <h4>extensions/manifest.json</h4>
+      <p>Chrome MV3 manifest. Points to <code>chrome/src/background-module.js</code> service worker.</p>
+    </div>
+    <div class="card">
+      <h4>rules/*.md</h4>
+      <p>Claude Code automation rules. Best practices, health checks, V1 page recipes.</p>
+    </div>
+  </div>
+</div>
+
+<!-- WHY USE IT -->
+<div class="panel">
+  <div class="panel-title">[^] Why Use It</div>
+  <div class="benefit-grid">
+    <div class="benefit">
+      <div class="icon">{=}</div>
+      <h4>Real Browser</h4>
+      <p>Your actual profile with cookies, sessions, and extensions. No re-auth.</p>
+    </div>
+    <div class="benefit">
+      <div class="icon">&lt;/&gt;</div>
+      <h4>Iframe Support</h4>
+      <p>Searches inside same-origin iframes automatically. Upstream can't do this.</p>
+    </div>
+    <div class="benefit">
+      <div class="icon">[+]</div>
+      <h4>Multi-Session</h4>
+      <p>Multiple AI sessions share one browser via relay multiplexing. Zero config.</p>
+    </div>
+    <div class="benefit">
+      <div class="icon">{*}</div>
+      <h4>Self-Improving</h4>
+      <p>Every blocker becomes a code fix to unifiedBackend.js, not a workaround doc.</p>
+    </div>
+  </div>
+</div>
+
+<!-- COMMANDS -->
+<div class="panel">
+  <div class="panel-title">[&gt;] Key Commands</div>
+  <div class="cmd-grid">
+    <div class="cmd">
+      <code>enable(client_id="my-project")</code>
+      <p>Activate browser control. Required before any browser_* tool.</p>
+    </div>
+    <div class="cmd">
+      <code>browser_tabs(action="list")</code>
+      <p>List open tabs. Also: new, attach, close.</p>
+    </div>
+    <div class="cmd">
+      <code>browser_navigate(url="...")</code>
+      <p>Navigate to URL in attached tab.</p>
+    </div>
+    <div class="cmd">
+      <code>browser_snapshot()</code>
+      <p>Get accessible page content including iframe content.</p>
+    </div>
+    <div class="cmd">
+      <code>browser_interact(action="click", ref="E42")</code>
+      <p>Click, type, select, hover, scroll on elements.</p>
+    </div>
+    <div class="cmd">
+      <code>browser_evaluate(expression="...")</code>
+      <p>Execute JavaScript in page context.</p>
+    </div>
+    <div class="cmd">
+      <code>browser_take_screenshot()</code>
+      <p>Capture visual screenshot of current tab.</p>
+    </div>
+    <div class="cmd">
+      <code>browser_lookup(selector=".class")</code>
+      <p>Find elements by CSS selector. Auto-searches iframes.</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

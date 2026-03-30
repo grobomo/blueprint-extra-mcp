@@ -7,3 +7,4 @@ archive/
 dist/
 .test-results/
 SESSION_STATE.md
+extensions/chrome/_locales/

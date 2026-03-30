@@ -6,5 +6,4 @@
 - [ ] T002 Add Windows setup script to fix _locales symlink for cloners
 - [ ] T003 Update CLAUDE.md with setup instructions for Windows cloners
 
-### Checkpoint
-- `scripts/test/test-secret-scan.sh` — runs the secret scan grep patterns against the repo locally
+**Checkpoint**: `bash scripts/test/test-secret-scan.sh` exits 0 — runs secret scan grep patterns and verifies setup-windows.bat exists

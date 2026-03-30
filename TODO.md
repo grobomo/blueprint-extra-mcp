@@ -20,12 +20,17 @@
 - **PR #26**: Update code hash, add squash-merge gotcha rule
 - **Discovered & documented**: Squash merge + feature branch workflow creates empty PRs (see .claude/rules/squash-merge-gotcha.md)
 
-### What's Next (prioritized by impact)
-1. **Analyze V1 activity** — Pull and analyze Vision One observed attack techniques, alerts, and endpoint activity. Generate actionable reports.
-2. **Auto-fix patterns catalog** — Document the auto-improvements already in unifiedBackend.js (iframe search, JS-click fallback) as a pattern library. When new blockers arise, the catalog shows how to add auto-fixes.
-3. **Extension distribution** — `releases/` is empty. Build the Chrome extension and put a CRX/ZIP there for easy sideloading without Chrome Web Store.
-4. **Integration tests** — Current tests are static (grep-based). Add a real integration test that starts the MCP server, connects a mock extension, and exercises the tool pipeline.
-5. **Expand V1 page recipes** — `rules/examples/v1-page-recipes.md`. Add recipes for more V1 console pages (endpoint inventory, XDR search, risk insights, email quarantine).
+### What's Next — Hackathon Goal: V1 Activity Tracker
+
+The mission is V1 console user activity analysis. Blueprint's Chrome extension has DOM access. Expand the clickRecorder into a full activity tracker, then merge with v1-helper extension.
+
+- [ ] **Spec 010: V1 Activity Tracker** — Expand `clickRecorder.js` to track page dwell time, hover patterns, scroll depth, navigation paths. Aggregate into behavioral analytics reports.
+- [ ] **Merge with v1-helper** — Rebrand and combine: activity monitoring (passive) + automation recipes (active) = one v1-helper extension.
+
+### Lower Priority (after hackathon goal)
+- [ ] Extension distribution — build CRX/ZIP in `releases/`
+- [ ] Integration tests — real MCP server + mock extension test pipeline
+- [ ] Expand V1 page recipes — more console pages in `rules/examples/v1-page-recipes.md`
 
 ## Done
 - [x] Spec 009: Code review round 2 (PR #25)

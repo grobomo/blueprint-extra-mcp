@@ -19,6 +19,8 @@ Browser automation + **V1 console user activity analysis** via Chrome extension 
 
 **This is the whole point of the hackathon. Every session should advance this goal. Don't drift into unrelated cleanup, API queries, or recipe catalogs.**
 
+**Endgame:** Once activity tracking works, rebrand and merge with the v1-helper Chrome extension. The combined extension = **v1-helper** with all V1 value in one place: passive activity monitoring + active automation recipes. Blueprint is the engine; v1-helper is the product.
+
 ## Auto-Improve Code on Blockers
 
 When Blueprint fails (element not found, iframe issues, timeout), FIX THE CODE in `server/src/unifiedBackend.js`, don't document workarounds.

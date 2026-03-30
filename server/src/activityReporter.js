@@ -9,10 +9,12 @@
 const fs = require('fs');
 const path = require('path');
 const debugLog = require('./debugLog')('ActivityReporter');
+const { enrichEvents, resolvePageName } = require('./v1Enrichment');
 
 class ActivityReporter {
-  constructor(events) {
-    this._events = events || [];
+  constructor(events, options = {}) {
+    // Auto-enrich V1 events unless explicitly disabled
+    this._events = options.skipEnrichment ? (events || []) : enrichEvents(events || []);
   }
 
   summarize() {
@@ -46,7 +48,7 @@ class ActivityReporter {
       topPages: this._topPages(dwells),
       topClicked: this._topClicked(clicks),
       topHovered: this._topHovered(hovers),
-      navFlow: navs.map(n => ({ from: n.from, to: n.to, timestamp: n.timestamp })),
+      navFlow: navs.map(n => ({ from: n.from, to: n.to, fromPageName: n.fromPageName || null, toPageName: n.toPageName || null, timestamp: n.timestamp })),
       scrollDepth: this._scrollSummary(scrolls)
     };
   }
@@ -69,10 +71,12 @@ class ActivityReporter {
     const byUrl = {};
     for (const d of dwells) {
       const key = d.url || 'unknown';
-      if (!byUrl[key]) byUrl[key] = { totalMs: 0, visits: 0, maxScrollPct: 0 };
+      if (!byUrl[key]) byUrl[key] = { totalMs: 0, visits: 0, maxScrollPct: 0, pageName: d.pageName || null, moduleName: d.moduleName || null };
       byUrl[key].totalMs += d.dwellMs || 0;
       byUrl[key].visits++;
       byUrl[key].maxScrollPct = Math.max(byUrl[key].maxScrollPct, d.maxScrollPct || 0);
+      if (d.pageName && !byUrl[key].pageName) byUrl[key].pageName = d.pageName;
+      if (d.moduleName && !byUrl[key].moduleName) byUrl[key].moduleName = d.moduleName;
     }
     return Object.entries(byUrl)
       .map(([url, data]) => ({ url, ...data, totalFormatted: this._formatDuration(data.totalMs) }))
@@ -146,7 +150,8 @@ class ActivityReporter {
   _buildHTML(summary) {
     const topPagesRows = summary.topPages.map(p => `
       <tr>
-        <td title="${this._escapeHTML(p.url)}">${this._escapeHTML(this._shortenUrl(p.url))}</td>
+        <td title="${this._escapeHTML(p.url)}">${p.pageName ? this._escapeHTML(p.pageName) : this._escapeHTML(this._shortenUrl(p.url))}</td>
+        <td>${p.moduleName ? this._escapeHTML(p.moduleName) : '-'}</td>
         <td>${p.visits}</td>
         <td>${p.totalFormatted}</td>
         <td>
@@ -174,9 +179,9 @@ class ActivityReporter {
 
     const navFlowItems = summary.navFlow.map(n => `
       <div class="nav-step">
-        <span class="nav-from" title="${this._escapeHTML(n.from)}">${this._escapeHTML(this._shortenUrl(n.from))}</span>
+        <span class="nav-from" title="${this._escapeHTML(n.from)}">${n.fromPageName ? this._escapeHTML(n.fromPageName) : this._escapeHTML(this._shortenUrl(n.from))}</span>
         <span class="nav-arrow">&rarr;</span>
-        <span class="nav-to" title="${this._escapeHTML(n.to)}">${this._escapeHTML(this._shortenUrl(n.to))}</span>
+        <span class="nav-to" title="${this._escapeHTML(n.to)}">${n.toPageName ? this._escapeHTML(n.toPageName) : this._escapeHTML(this._shortenUrl(n.to))}</span>
       </div>`).join('');
 
     return `<!DOCTYPE html>
@@ -223,7 +228,7 @@ class ActivityReporter {
 
 <div class="section">
   <h2>Top Pages by Dwell Time</h2>
-  ${topPagesRows ? `<table><thead><tr><th>Page</th><th>Visits</th><th>Total Time</th><th>Scroll Depth</th></tr></thead><tbody>${topPagesRows}</tbody></table>` : '<p class="empty">No page dwell data recorded.</p>'}
+  ${topPagesRows ? `<table><thead><tr><th>Page</th><th>Module</th><th>Visits</th><th>Total Time</th><th>Scroll Depth</th></tr></thead><tbody>${topPagesRows}</tbody></table>` : '<p class="empty">No page dwell data recorded.</p>'}
 </div>
 
 <div class="section">

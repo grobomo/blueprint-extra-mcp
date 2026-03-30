@@ -1,24 +1,29 @@
 # Blueprint Extra MCP
 
-Browser automation via Chrome extension + MCP server.
+Browser automation + **V1 console user activity analysis** via Chrome extension + MCP server.
 
-**Upstream:** Originally forked from railsblueprint/blueprint-mcp. This codebase is now independent — do NOT pull or merge from upstream. Our customizations (iframe handling, relay mode, incognito support, auto-fix patterns) will break on upstream updates.
+**Upstream:** Originally forked from railsblueprint/blueprint-mcp. This codebase is now independent — do NOT pull or merge from upstream.
 
-## CRITICAL: Auto-Improve Code on Blockers
+## HACKATHON MISSION (read this first, every session)
 
-**When you encounter a blocker using Blueprint (element not found, interaction fails, iframe issues, timeout, etc.), DO NOT document a workaround. Instead, FIX THE CODE.**
+**Goal:** Instrument the Vision One console to track how real users interact with it. Blueprint's Chrome extension has full DOM access. Use it to record and analyze:
 
-1. **Diagnose** — understand why the tool failed (check `server/src/unifiedBackend.js`)
-2. **Fix** — modify the server code to handle the case automatically
-3. **Verify** — `node -c server/src/unifiedBackend.js` to syntax-check, then restart and test
-4. **Update rules** — if there's a relevant rule file in `rules/`, update it. If the fix made a rule obsolete, delete the rule.
+- **Clicks** — what users click, in what order, with full DOM context (already built: `server/src/clickRecorder.js`)
+- **Page dwell time** — how long users stay on each V1 page/section
+- **Hover patterns** — which elements get hovered, for how long (tooltip reads, menu exploration)
+- **Scroll depth** — how far users scroll on each page
+- **Navigation paths** — page-to-page sequences, sidebar usage, back-button patterns
+- **Activity reports** — aggregate behavioral analytics: which features get used, which get ignored, where users get stuck
 
-Examples of auto-improvements already made:
-- `browser_lookup` now auto-searches inside same-origin iframes (2 levels deep) when nothing found in top document
-- `browser_interact` click auto-finds and JS-clicks elements inside iframes when CDP can't reach them
-- Both were code fixes to `unifiedBackend.js`, not documentation workarounds
+**Approach:** The extension injects JS into V1 pages. The clickRecorder already captures clicks/keypresses via a `__BP_RECORDER__` console.log channel. Expand this into a full activity tracker. Screenshots + x/y coordinate clicks + DOM trace = rich behavioral data.
 
-**The goal: Blueprint should just work on any site. Every failure is a bug to fix, not a pattern to document.**
+**This is the whole point of the hackathon. Every session should advance this goal. Don't drift into unrelated cleanup, API queries, or recipe catalogs.**
+
+**Endgame:** Once activity tracking works, rebrand and merge with the v1-helper Chrome extension. The combined extension = **v1-helper** with all V1 value in one place: passive activity monitoring + active automation recipes. Blueprint is the engine; v1-helper is the product.
+
+## Auto-Improve Code on Blockers
+
+When Blueprint fails (element not found, iframe issues, timeout), FIX THE CODE in `server/src/unifiedBackend.js`, don't document workarounds.
 
 ## Architecture
 

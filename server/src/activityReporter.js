@@ -248,7 +248,7 @@ class ActivityReporter {
 
 <script>
   // Raw data for custom analysis
-  window.__activityData = ${JSON.stringify(summary)};
+  window.__activityData = ${JSON.stringify(summary).replace(/</g, '\\u003c')};
 </script>
 </body>
 </html>`;

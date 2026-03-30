@@ -46,8 +46,17 @@ if exist "chrome\_locales\en" (
     echo   Junction created: chrome/_locales -^> shared\_locales
 )
 
+REM --- Clean up any leftover placeholder/backup files ---
+echo [3/4] Cleaning up placeholder files...
+if exist "_locales.git-placeholder" del "_locales.git-placeholder"
+if exist "_locales.bak" del "_locales.bak"
+if exist "locales-git-placeholder.bak" del "locales-git-placeholder.bak"
+if exist "chrome\_locales.git-placeholder" del "chrome\_locales.git-placeholder"
+if exist "chrome\_locales.bak" del "chrome\_locales.bak"
+echo   Done.
+
 REM --- Tell git to ignore the local junction changes ---
-echo [3/3] Configuring git to ignore junction changes...
+echo [4/4] Configuring git to ignore junction changes...
 git update-index --assume-unchanged _locales 2>nul
 git update-index --assume-unchanged chrome/_locales 2>nul
 echo   Done.

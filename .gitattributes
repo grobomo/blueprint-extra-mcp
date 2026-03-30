@@ -1,0 +1,11 @@
+# Windows: _locales is a symlink in git but needs to be a junction on Windows.
+# Run extensions/setup-windows.bat after cloning on Windows.
+extensions/_locales text eol=lf
+extensions/chrome/_locales text eol=lf
+
+# Shell scripts should stay LF
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Batch files stay CRLF
+*.bat text eol=crlf

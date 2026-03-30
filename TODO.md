@@ -1,36 +1,30 @@
 # Blueprint Extra MCP — TODO
 
-## Session Handoff (2026-03-30)
+## Session Handoff (2026-03-30 session 3)
 
-### What Was Done This Session
-- PR #2: RONE portal workflow definitions → main
-- PR #3: Spec 001 (secret-scan CI + Windows setup) → main
-- PR #4-7: Spec 003 — improved setup-windows.bat (both junctions), .gitattributes, CLAUDE.md Windows docs
-- PR #8: XSS fix in oauth.js (escapeHtml for callback error param), Windows `start` command fix
-- PR #9: Removed 324 lines dead code from unifiedBackend.js (7 unused handlers)
-- PR #10-11: Spec 004 complete → main
-- Fixed main branch (had 4 unpushed commits, moved to feature branch, PRed properly)
-- All PRs squash-merged, main is clean and synced
+### Plan: Spec 009 — Code Review & Cleanup
 
-### Current State
-- Branch: `main` — clean, up to date with origin
-- gh auth: `grobomo` (correct for this repo)
-- `extensions/_locales` is still a git symlink placeholder file (needs `setup-windows.bat` after every checkout)
+Remaining backlog from session 2 + new findings from code review scan:
 
-### Remaining Backlog
-- [ ] Publish project via publish-project skill (docs, marketplace)
-- [ ] mcp-manager setup.js is broken (`Cannot find module '../../super-manager/shared/setup-utils'`) — this project has no .mcp.json, preventing Blueprint MCP connection testing
-- [ ] Clean up stale branches (001-*, 002-*, 003-*, 004-* merged branches)
+- [ ] T001: Extract shared `debugLog` to `server/src/debugLog.js` (9 copies → 1 import)
+- [ ] T002: Fix command injection in `oauth.js:_openBrowser` — use URL validation
+- [ ] T003: Add path validation to `writeFileSync` in screenshot + PDF save handlers
+- [ ] T004: Move `require('fs')` to top-level in `unifiedBackend.js`
+- [ ] T005: Delete stale remote branches (008-fix-housekeeping, 008-T001-cleanup, 008-T002-merge-main, 008-T003-merge)
+- [ ] T006: Merge spec 009 feature branch to main
+
+### Resolved (no code change needed)
+- [x] Service worker error from chrome/ folder — expected, documented in CLAUDE.md
+- [x] chrome/_locales decision — generated via setup script, already in .gitignore
 
 ## Done
+- [x] Spec 008: Housekeeping (PRs #19-21)
+- [x] Spec 007: Publish docs (PRs #14-18)
+- [x] Fix 2 unpushed commits on main (rebased)
+- [x] Fix extensions/_locales junction + remove git placeholder
+- [x] Spec 005: Update .gitignore (PRs #12-13)
 - [x] Spec 004: Code review & security fixes (PRs #8-11)
-  - [x] XSS fix in oauth.js callback HTML
-  - [x] Windows `start` command empty title arg fix
-  - [x] Removed 324 lines dead code from unifiedBackend.js
 - [x] Spec 003: Improve setup & docs (PRs #4-7)
-  - [x] setup-windows.bat for both `_locales` and `chrome/_locales` junctions
-  - [x] .gitattributes for line ending consistency
-  - [x] CLAUDE.md Windows setup instructions
 - [x] Spec 002: RONE portal workflows (PR #2)
 - [x] Spec 001: Secret scan CI and Windows setup (PR #3)
-- [x] Fix Chrome extension `_locales` symlink → Windows junction
+- [x] Fix Chrome extension `_locales` symlink -> Windows junction

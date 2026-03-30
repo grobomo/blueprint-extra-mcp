@@ -25,7 +25,7 @@ Examples of auto-improvements already made:
 ```
 extensions/                     <- Chrome extension (load this folder in chrome://extensions)
   manifest.json                 <- MV3 manifest
-  _locales -> shared/_locales   <- Symlink (admin: mklink /D _locales shared\_locales)
+  _locales -> shared/_locales   <- Symlink (Windows: run setup-windows.bat)
   chrome/src/                   <- Chrome-specific code
   shared/                       <- Shared modules
 server/                         <- MCP server (stdio + WebSocket)
@@ -39,13 +39,30 @@ rules/                          <- Usage rules (loaded by rule-manager)
 ## Setup
 
 ```bash
-# Extension:
-cd extensions && cmd /c "mklink /D _locales shared\_locales"
-# Chrome > chrome://extensions > Developer mode > Load unpacked > select extensions/
-
 # Server:
 cd server && npm install
+
+# Extension (Linux/Mac):
+cd extensions
+# Symlink should work out of the box. If not:
+ln -s shared/_locales _locales
+
+# Extension (Windows):
+# Git stores _locales as a symlink, but Windows checks it out as a text file.
+# Run the setup script to create proper junctions (no admin required):
+cd extensions && setup-windows.bat
+
+# Load in Chrome:
+# chrome://extensions > Developer mode > Load unpacked > select extensions/
 ```
+
+### Windows `_locales` Symlink Issue
+
+On Windows, `git clone` creates `extensions/_locales` as a 15-byte text file containing `shared/_locales` instead of a real symlink. Chrome rejects the extension with `_locales subtree is missing`.
+
+**Fix:** Run `extensions/setup-windows.bat`. It replaces the placeholder with a Windows junction (no admin needed) and tells git to ignore the local change via `--assume-unchanged`.
+
+**After `git checkout` or `git pull`:** Git may restore the placeholder file, breaking the junction. Re-run `setup-windows.bat` if Chrome stops loading the extension.
 
 ## Connection States (statefulBackend.js)
 

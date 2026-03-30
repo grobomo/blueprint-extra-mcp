@@ -16,14 +16,7 @@
  */
 
 const WebSocket = require('ws');
-const { getLogger } = require('./fileLogger');
-
-function debugLog(...args) {
-  if (global.DEBUG_MODE) {
-    const logger = getLogger();
-    logger.log('[RelayClient]', ...args);
-  }
-}
+const debugLog = require('./debugLog')('RelayClient');
 
 class RelayClient {
   constructor(port = 5555, host = '127.0.0.1') {

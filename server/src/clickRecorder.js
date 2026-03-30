@@ -16,11 +16,7 @@
  * USAGE: Start recording, click through the task, stop recording, get workflow JSON.
  */
 
-function debugLog(...args) {
-  if (global.DEBUG_MODE) {
-    console.error('[ClickRecorder]', ...args);
-  }
-}
+const debugLog = require('./debugLog')('ClickRecorder');
 
 // The JS to inject into pages. Self-contained, no dependencies.
 const RECORDER_SCRIPT = `(function(){

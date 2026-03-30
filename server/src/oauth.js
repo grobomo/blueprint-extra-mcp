@@ -27,12 +27,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-// Helper function for debug logging
-function debugLog(...args) {
-  if (global.DEBUG_MODE) {
-    console.error('[OAuth]', ...args);
-  }
-}
+const debugLog = require('./debugLog')('OAuth');
 
 // Configuration - Use platform-specific config directory
 // Windows: %APPDATA%\chrome-mcp\tokens.json (e.g., C:\Users\Username\AppData\Roaming\chrome-mcp\tokens.json)
@@ -537,20 +532,34 @@ class OAuth2Client {
    * @param {string} url
    */
   async _openBrowser(url) {
-    const { exec } = require('child_process');
+    // Validate URL to prevent command injection
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw new Error(`Refusing to open non-HTTP URL: ${parsed.protocol}`);
+      }
+    } catch (e) {
+      if (e.message.startsWith('Refusing')) throw e;
+      throw new Error(`Invalid URL: ${url}`);
+    }
+
+    const { execFile } = require('child_process');
     const platform = process.platform;
 
-    let command;
+    let cmd, args;
     if (platform === 'darwin') {
-      command = `open "${url}"`;
+      cmd = 'open';
+      args = [url];
     } else if (platform === 'win32') {
-      command = `start "" "${url}"`;
+      cmd = 'cmd.exe';
+      args = ['/c', 'start', '""', url];
     } else {
-      command = `xdg-open "${url}"`;
+      cmd = 'xdg-open';
+      args = [url];
     }
 
     return new Promise((resolve, reject) => {
-      exec(command, (error) => {
+      execFile(cmd, args, (error) => {
         if (error) {
           debugLog('Error opening browser:', error);
           reject(error);

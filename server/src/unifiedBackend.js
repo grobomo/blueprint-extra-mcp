@@ -5,13 +5,10 @@
  * Uses Transport abstraction to send commands to extension.
  */
 
+const fs = require('fs');
+const path = require('path');
 const { SitePlaybooks } = require('./sitePlaybooks');
-
-function debugLog(...args) {
-  if (global.DEBUG_MODE) {
-    console.error('[UnifiedBackend]', ...args);
-  }
-}
+const debugLog = require('./debugLog')('UnifiedBackend');
 
 class UnifiedBackend {
   constructor(config, transport) {
@@ -3516,8 +3513,8 @@ class UnifiedBackend {
 
     // If path is provided, save the screenshot to disk
     if (args.path && result.data) {
-      const fs = require('fs');
-      fs.writeFileSync(args.path, buffer);
+      const savePath = path.resolve(args.path);
+      fs.writeFileSync(savePath, buffer);
 
       const actualScale = deviceScale === 0 ? viewport.devicePixelRatio : deviceScale;
       const viewportStr = viewport.width && viewport.height ? `\nViewport: ${viewport.width}x${viewport.height}` : '';
@@ -4586,9 +4583,9 @@ This request was captured by the browser extension's background tracker (webRequ
 
     // If path is provided, save the PDF to disk
     if (args.path && result.data) {
-      const fs = require('fs');
+      const savePath = path.resolve(args.path);
       const buffer = Buffer.from(result.data, 'base64');
-      fs.writeFileSync(args.path, buffer);
+      fs.writeFileSync(savePath, buffer);
 
       if (options.rawResult) {
         return {

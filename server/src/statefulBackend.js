@@ -21,12 +21,7 @@ const wrappers = require('./wrappers');
 const fs = require('fs');
 const path = require('path');
 
-// Helper function for debug logging
-function debugLog(...args) {
-  if (global.DEBUG_MODE) {
-    console.error(...args);
-  }
-}
+const debugLog = require('./debugLog')();
 
 class StatefulBackend {
   constructor(config) {

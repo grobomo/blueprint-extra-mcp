@@ -26,7 +26,14 @@ else
 fi
 
 echo "=== Test: Windows start command has empty title ==="
-grep -q 'start "" "' "$OAUTH" && echo "PASS" || { echo "FAIL: Windows start missing empty title arg"; exit 1; }
+# Accepts both exec style: start "" "${url}" and execFile style: 'start', '""'
+grep -qE 'start.*""' "$OAUTH" && echo "PASS" || { echo "FAIL: Windows start missing empty title arg"; exit 1; }
+
+echo "=== Test: _openBrowser uses execFile not exec ==="
+grep -q 'execFile' "$OAUTH" && echo "PASS" || { echo "FAIL: should use execFile to prevent command injection"; exit 1; }
+
+echo "=== Test: _openBrowser validates URL protocol ==="
+grep -qE "http:|https:" "$OAUTH" && echo "PASS" || { echo "FAIL: should validate URL protocol"; exit 1; }
 
 echo "=== Test: no hardcoded secrets ==="
 if grep -inE '(api[_-]?key|password|secret)\s*[:=]\s*["\x27][^"\x27]+' "$OAUTH" 2>/dev/null; then

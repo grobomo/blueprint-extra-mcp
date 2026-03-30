@@ -16,14 +16,7 @@
 
 const WebSocket = require('ws');
 const { randomUUID } = require('crypto');
-const { getLogger } = require('./fileLogger');
-
-// Helper function for debug logging
-function debugLog(...args) {
-  if (global.DEBUG_MODE) {
-    console.error('[MCPConnection]', ...args);
-  }
-}
+const debugLog = require('./debugLog')('MCPConnection');
 
 class MCPConnection {
   constructor(config) {

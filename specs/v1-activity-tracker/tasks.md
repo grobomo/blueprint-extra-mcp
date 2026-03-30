@@ -7,10 +7,10 @@ Captures clicks, hovers, scroll depth, page dwell time, navigation paths.
 
 **Checkpoint**: `bash scripts/test/test-activity-tracker.sh` exits 0
 
-- [ ] T001 Add hover tracking to RECORDER_SCRIPT — track mouseover events with element info, hover duration (start/end timestamps), filter noise (>500ms threshold)
-- [ ] T002 Add scroll depth tracking — record max scroll percentage per page, scroll events with timestamps
-- [ ] T003 Add page dwell time — track page enter/leave via visibilitychange + hashchange + beforeunload, emit dwell events with page URL and duration
-- [ ] T004 Add navigation path tracking — record page transitions (from → to) with timestamps, sidebar menu clicks as named waypoints
+- [x] T001 Add hover tracking to RECORDER_SCRIPT — track mouseover events with element info, hover duration (start/end timestamps), filter noise (>500ms threshold)
+- [x] T002 Add scroll depth tracking — record max scroll percentage per page, scroll events with timestamps
+- [x] T003 Add page dwell time — track page enter/leave via visibilitychange + hashchange + beforeunload, emit dwell events with page URL and duration
+- [x] T004 Add navigation path tracking — record page transitions (from → to) with timestamps, sidebar menu clicks as named waypoints
 
 ## Phase 2: Activity Report Generation
 

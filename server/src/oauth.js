@@ -16,6 +16,17 @@ const os = require('os');
 const lockfile = require('proper-lockfile');
 const envPaths = require('env-paths');
 
+// HTML-escape to prevent XSS in callback responses
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // Helper function for debug logging
 function debugLog(...args) {
   if (global.DEBUG_MODE) {
@@ -410,7 +421,7 @@ class OAuth2Client {
         <html>
           <body>
             <h1>Authentication Failed</h1>
-            <p>Error: ${error}</p>
+            <p>Error: ${escapeHtml(error)}</p>
             <p>You can close this window.</p>
           </body>
         </html>
@@ -533,7 +544,7 @@ class OAuth2Client {
     if (platform === 'darwin') {
       command = `open "${url}"`;
     } else if (platform === 'win32') {
-      command = `start "${url}"`;
+      command = `start "" "${url}"`;
     } else {
       command = `xdg-open "${url}"`;
     }

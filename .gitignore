@@ -5,3 +5,5 @@ logs/
 Thumbs.db
 archive/
 dist/
+.test-results/
+SESSION_STATE.md

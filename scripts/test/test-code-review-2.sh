@@ -11,10 +11,10 @@ run_test() {
   echo "=== Test: $name ==="
   if eval "$2"; then
     echo "PASS"
-    ((PASS++))
+    PASS=$((PASS + 1))
   else
     echo "FAIL"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
   fi
 }
 
@@ -29,7 +29,7 @@ run_test "at least 5 files import shared debugLog" \
   '[ $(grep -rl "require.*debugLog" server/src/*.js | wc -l) -ge 5 ]'
 
 run_test "no file still defines its own debugLog" \
-  '[ $(grep -c "^function debugLog" server/src/*.js 2>/dev/null || echo 0) -le 1 ]'
+  '[ $(grep -rl "^function debugLog" server/src/*.js 2>/dev/null | wc -l) -eq 0 ]'
 
 # T002: oauth.js _openBrowser uses safe URL handling
 run_test "oauth.js does not use bare exec for URL" \
@@ -37,7 +37,7 @@ run_test "oauth.js does not use bare exec for URL" \
 
 # T003: writeFileSync has path validation
 run_test "unifiedBackend.js validates path before writeFileSync" \
-  "grep -q 'path.resolve\|sanitizePath\|validatePath' server/src/unifiedBackend.js"
+  "grep -qE 'path.resolve|sanitizePath|validatePath' server/src/unifiedBackend.js"
 
 # T004: no inline require('fs') in unifiedBackend.js
 run_test "no inline require('fs') in handler functions" \

@@ -11,12 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
-
-function debugLog(...args) {
-  if (global.DEBUG_MODE) {
-    console.error('[ActionValidator]', ...args);
-  }
-}
+const debugLog = require('./debugLog')('ActionValidator');
 
 // Tools that modify page state and should be validated
 const VALIDATABLE_TOOLS = new Set([

@@ -12,11 +12,7 @@
  *   - postAction(transport, toolName, args, result): runs after each tool call
  */
 
-function debugLog(...args) {
-  if (global.DEBUG_MODE) {
-    console.error('[SitePlaybooks]', ...args);
-  }
-}
+const debugLog = require('./debugLog')('SitePlaybooks');
 
 /**
  * Convert a wildcard pattern to a RegExp

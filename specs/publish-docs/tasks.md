@@ -15,5 +15,5 @@
 
 **Checkpoint**: `bash scripts/test/test-publish-docs.sh` exits 0
 
-- [ ] T004 Merge feature branch to main
+- [x] T004 Merge feature branch to main
   **Checkpoint**: `gh pr view --json state` shows MERGED

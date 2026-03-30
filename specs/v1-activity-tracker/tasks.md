@@ -24,5 +24,5 @@ Captures clicks, hovers, scroll depth, page dwell time, navigation paths.
 
 **Checkpoint**: `bash scripts/test/test-v1-enrichment.sh` exits 0
 
-- [ ] T008 V1 page name resolver — map V1 hash routes (#/app/sensor-policy, #/app/xdr, etc.) to human-readable page names for reports
-- [ ] T009 V1 iframe context enrichment — tag events with which V1 module they belong to based on iframe name (__VES_CONTAINER = Endpoint Security, __ADS_CONTAINER = Data Security, etc.)
+- [x] T008 V1 page name resolver — map V1 hash routes (#/app/sensor-policy, #/app/xdr, etc.) to human-readable page names for reports
+- [x] T009 V1 iframe context enrichment — tag events with which V1 module they belong to based on iframe name (__VES_CONTAINER = Endpoint Security, __ADS_CONTAINER = Data Security, etc.)

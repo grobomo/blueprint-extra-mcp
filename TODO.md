@@ -1,38 +1,37 @@
 # Blueprint Extra MCP — TODO
 
-## Session Handoff (2026-03-30 session 3, final)
+## Session Handoff (2026-03-30 session 4)
 
 ### Current State
-- **Branch**: `main` — in sync with origin/main (9f7c82c)
+- **Branch**: `main` — in sync with origin/main
 - **gh auth**: `grobomo` (correct for this repo)
 - **Working tree**: clean
-- **All remote branches clean**: only main remains
-- **Total PRs**: 26 merged
-- **All specs complete**: 001-009 + housekeeping
+- **Total PRs**: 29 merged
+- **All specs complete**: 001-010
 
-### What Was Done This Session (session 3)
-- **Spec 009**: Code review round 2 (PR #25)
-  - Extract shared debugLog to server/src/debugLog.js (9 copies → 1 factory import)
-  - Fix command injection in oauth.js _openBrowser (exec → execFile + URL protocol validation)
-  - Add path.resolve() before writeFileSync in screenshot + PDF save handlers
-  - Move require('fs') to top-level imports in unifiedBackend.js
-  - Delete 8 stale remote branches
-- **PR #26**: Update code hash, add squash-merge gotcha rule
-- **Discovered & documented**: Squash merge + feature branch workflow creates empty PRs (see .claude/rules/squash-merge-gotcha.md)
+### What Was Done This Session (session 4)
+- **Spec 010: V1 Activity Tracker** (PRs #27-29)
+  - `server/src/activityTracker.js` — full user activity instrumentation (clicks, hovers >500ms, scroll depth, page dwell, navigation paths)
+  - `server/src/activityReporter.js` — aggregates events into summaries + generates standalone HTML dashboard
+  - `server/src/v1Enrichment.js` — maps 45+ V1 hash routes to page names, 13 iframe containers to module names
+  - `browser_activity` MCP tool — start/stop/report/status, wired into statefulBackend.js
+  - 71 tests across 3 test scripts, all passing
+- Updated CLAUDE.md with hackathon mission: V1 activity tracking + v1-helper merge endgame
 
-### What's Next — Hackathon Goal: V1 Activity Tracker
+### Hackathon Goal: V1 Activity Tracker
 
-The mission is V1 console user activity analysis. Blueprint's Chrome extension has DOM access. Expand the clickRecorder into a full activity tracker, then merge with v1-helper extension.
+**Mission:** Instrument V1 console to track real user behavior. Blueprint Chrome extension has DOM access. Activity tracker captures clicks, hovers, scroll, dwell, navigation. Reports show which features get used, where users get stuck.
 
-- [ ] **Spec 010: V1 Activity Tracker** — Expand `clickRecorder.js` to track page dwell time, hover patterns, scroll depth, navigation paths. Aggregate into behavioral analytics reports.
-- [ ] **Merge with v1-helper** — Rebrand and combine: activity monitoring (passive) + automation recipes (active) = one v1-helper extension.
+**Endgame:** Merge with v1-helper Chrome extension = one extension for passive monitoring + active automation.
 
-### Lower Priority (after hackathon goal)
+### What's Next
+- [ ] **Merge with v1-helper** — Rebrand and combine: activity monitoring (passive) + automation recipes (active) = one v1-helper extension
+- [ ] **Live test on V1** — Open V1 console, start `browser_activity`, browse around, generate HTML report. Verify real-world data quality.
 - [ ] Extension distribution — build CRX/ZIP in `releases/`
 - [ ] Integration tests — real MCP server + mock extension test pipeline
-- [ ] Expand V1 page recipes — more console pages in `rules/examples/v1-page-recipes.md`
 
 ## Done
+- [x] Spec 010: V1 Activity Tracker (PRs #27-29)
 - [x] Spec 009: Code review round 2 (PR #25)
 - [x] PR #26: Code hash + gotcha rule
 - [x] Spec 008: Housekeeping (PRs #19-21)

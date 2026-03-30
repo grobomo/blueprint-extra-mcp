@@ -16,9 +16,9 @@ Captures clicks, hovers, scroll depth, page dwell time, navigation paths.
 
 **Checkpoint**: `bash scripts/test/test-activity-report.sh` exits 0
 
-- [ ] T005 Create ActivityReporter class in server/src/activityReporter.js — aggregates raw events into summary: top clicked elements, page dwell rankings, hover heatmap data, navigation flow graph
-- [ ] T006 Add MCP tool `browser_activity_report` — returns JSON summary of recorded activity session, callable via Blueprint tools
-- [ ] T007 Add HTML report output — generate a standalone HTML file with activity dashboard (dwell time bars, click counts, nav flow)
+- [x] T005 Create ActivityReporter class in server/src/activityReporter.js — aggregates raw events into summary: top clicked elements, page dwell rankings, hover heatmap data, navigation flow graph
+- [x] T006 Add MCP tool `browser_activity` — returns JSON summary of recorded activity session, callable via Blueprint tools
+- [x] T007 Add HTML report output — generate a standalone HTML file with activity dashboard (dwell time bars, click counts, nav flow)
 
 ## Phase 3: V1-Specific Enrichment
 

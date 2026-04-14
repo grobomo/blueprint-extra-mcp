@@ -10,7 +10,7 @@
 - **All specs complete**: 001-011
 
 ### What Was Done This Session (session 5)
-- **T001: Fixed extension loading** — broken `_locales` symlink (old repo path). Archived `chrome/manifest.json` (upstream duplicate). PR #31.
+- T001 (done): Fixed extension loading — broken `_locales` symlink (old repo path). Archived `chrome/manifest.json` (upstream duplicate). PR #31.
 - **Spec 011: Integration Tests** (PR #31) — 43 new tests:
   - `mcpProcess.test.js` (8) — spawn real MCP server, JSON-RPC over stdio (newline-delimited JSON, NOT Content-Length framing)
   - `activityTracker.test.js` (8) — mock transport, start/stop lifecycle, event collection

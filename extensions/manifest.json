@@ -3,7 +3,6 @@
   "name": "Blueprint Extra MCP for Chrome",
   "version": "1.9.21",
   "description": "Browser automation for Claude via MCP. Fork with iframe snapshots, incognito tab recognition, relay fixes.",
-  "default_locale": "en",
   "permissions": [
     "alarms",
     "debugger",

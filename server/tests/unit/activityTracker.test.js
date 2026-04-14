@@ -74,7 +74,7 @@ describe('ActivityTracker', () => {
       { type: 'hover', timestamp: '2026-01-01T00:00:03Z', element: { tag: 'A', text: 'Link' }, durationMs: 800 },
       { type: 'page_dwell', timestamp: '2026-01-01T00:00:00Z', dwellMs: 5000, maxScrollPct: 75, url: 'https://example.com/page1' },
       { type: 'navigation', timestamp: '2026-01-01T00:00:04Z', from: '/page1', to: '/page2', method: 'hashchange' },
-      { type: 'scroll_depth', timestamp: '2026-01-01T00:00:05Z', pct: 80, url: 'https://example.com/page1' }
+      { type: 'scroll_depth', timestamp: '2026-01-01T00:00:05Z', scrollPct: 80, url: 'https://example.com/page1' }
     ];
 
     const transport = createMockTransport({ stopResult: { events, count: events.length } });

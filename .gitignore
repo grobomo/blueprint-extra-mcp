@@ -10,3 +10,5 @@ SESSION_STATE.md
 extensions/chrome/_locales/
 .mcp.json
 archive/
+extensions/_locales
+extensions/chrome/_locales

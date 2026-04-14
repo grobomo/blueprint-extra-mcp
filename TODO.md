@@ -1,27 +1,24 @@
 # Blueprint Extra MCP — TODO
 
-## Session Handoff (2026-03-30 session 4, final)
+## Session Handoff (2026-04-14 session 5)
 
 ### Current State
-- **Branch**: `main` — in sync with origin/main (ad55989)
+- **Branch**: `main` — merged up to PR #32
 - **gh auth**: `grobomo` (correct for this repo)
-- **Working tree**: clean
-- **All remote branches clean**: only main remains
-- **Total PRs**: 30 merged
-- **All specs complete**: 001-010
-- **.mcp.json**: created and gitignored (mcp-manager entry for live testing)
+- **Working tree**: clean (`.workflow-state.json` untracked, harmless)
+- **Total PRs**: 32 merged
+- **All specs complete**: 001-011
 
-### What Was Done This Session (session 4)
-- **Spec 010: V1 Activity Tracker** (PRs #27-29)
-  - `server/src/activityTracker.js` — full activity instrumentation (clicks, hovers >500ms, scroll depth, page dwell, navigation paths)
-  - `server/src/activityReporter.js` — aggregates events → JSON summary + standalone HTML dashboard (dark theme)
-  - `server/src/v1Enrichment.js` — maps 45+ V1 hash routes → page names, 13 iframe containers → module names
-  - `browser_activity` MCP tool — start/stop/report/status, wired into statefulBackend.js
-  - 71 tests across 3 test scripts, all passing
-- **PR #30**: XSS fix in HTML report JSON embed (`</script>` escape)
-- Updated CLAUDE.md with hackathon mission + endgame (v1-helper merge)
-- Added `.mcp.json` (gitignored) for live testing with mcp-manager
-- Deleted 4 stale remote branches
+### What Was Done This Session (session 5)
+- T001 (done): Fixed extension loading — broken `_locales` symlink (old repo path). Archived `chrome/manifest.json` (upstream duplicate). PR #31.
+- **Spec 011: Integration Tests** (PR #31) — 43 new tests:
+  - `mcpProcess.test.js` (8) — spawn real MCP server, JSON-RPC over stdio (newline-delimited JSON, NOT Content-Length framing)
+  - `activityTracker.test.js` (8) — mock transport, start/stop lifecycle, event collection
+  - `activityReporter.test.js` (12) — summarize aggregation, HTML generation, XSS safety
+  - `v1Enrichment.test.js` (15) — page name resolution, iframe mapping, event enrichment
+  - Shell runner: `bash scripts/test/test-integration.sh`
+- **T002: Removed `default_locale` from manifest** (PR #32) — root manifest has no `__MSG_*__` tokens, so `_locales` dir is unnecessary. Eliminates the recurring Windows junction breakage on branch switches.
+- **Key discovery**: MCP SDK uses newline-delimited JSON (not Content-Length framing). Important for any future stdio integration tests.
 
 ### Hackathon Goal: V1 Activity Tracker
 

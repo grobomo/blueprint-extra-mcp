@@ -55,12 +55,28 @@ console.log(`Packaging Blueprint Extra MCP v${version}\n`);
 console.log('=== Step 1: Build ===');
 execSync(`node "${BUILD_SCRIPT}"`, { stdio: 'inherit', cwd: ROOT });
 
-// --- Copy root manifest to dist (build-chrome.js builds chrome/ subfolder content) ---
+// --- Write adjusted manifest to dist ---
+// Root manifest references chrome/src/*, chrome/popup.html etc.
+// In dist, the chrome/ prefix is stripped (build-chrome.js flattens it).
 const distManifest = path.join(DIST_DIR, 'manifest.json');
-if (!fs.existsSync(distManifest)) {
-  fs.copyFileSync(MANIFEST, distManifest);
-  console.log('Copied manifest.json to dist/chrome/\n');
+const distManifestObj = JSON.parse(JSON.stringify(manifest));
+
+function stripChromePrefix(p) {
+  return p.replace(/^chrome\//, '');
 }
+
+if (distManifestObj.background?.service_worker) {
+  distManifestObj.background.service_worker = stripChromePrefix(distManifestObj.background.service_worker);
+}
+if (distManifestObj.action?.default_popup) {
+  distManifestObj.action.default_popup = stripChromePrefix(distManifestObj.action.default_popup);
+}
+for (const cs of distManifestObj.content_scripts || []) {
+  cs.js = (cs.js || []).map(stripChromePrefix);
+}
+
+fs.writeFileSync(distManifest, JSON.stringify(distManifestObj, null, 2) + '\n');
+console.log('Wrote adjusted manifest.json to dist/chrome/\n');
 
 // --- Validate dist ---
 console.log('\n=== Step 2: Validate dist ===');

@@ -12,3 +12,5 @@ extensions/chrome/_locales/
 archive/
 extensions/_locales
 extensions/chrome/_locales
+releases/
+.tmp-zip.py

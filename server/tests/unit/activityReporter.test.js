@@ -18,8 +18,8 @@ function createSyntheticEvents() {
     { type: 'page_dwell', timestamp: '2026-01-01T00:00:00Z', dwellMs: 15000, maxScrollPct: 60, url: 'https://portal.xdr.trendmicro.com/#/app/dashboard' },
     { type: 'page_dwell', timestamp: '2026-01-01T00:00:20Z', dwellMs: 8000, maxScrollPct: 40, url: 'https://portal.xdr.trendmicro.com/#/app/endpointSecurity' },
     { type: 'navigation', timestamp: '2026-01-01T00:00:15Z', from: 'https://portal.xdr.trendmicro.com/#/app/dashboard', to: 'https://portal.xdr.trendmicro.com/#/app/endpointSecurity', method: 'hashchange' },
-    { type: 'scroll_depth', timestamp: '2026-01-01T00:00:12Z', pct: 60, url: 'https://portal.xdr.trendmicro.com/#/app/dashboard' },
-    { type: 'scroll_depth', timestamp: '2026-01-01T00:00:25Z', pct: 40, url: 'https://portal.xdr.trendmicro.com/#/app/endpointSecurity' },
+    { type: 'scroll_depth', timestamp: '2026-01-01T00:00:12Z', scrollPct: 60, url: 'https://portal.xdr.trendmicro.com/#/app/dashboard' },
+    { type: 'scroll_depth', timestamp: '2026-01-01T00:00:25Z', scrollPct: 40, url: 'https://portal.xdr.trendmicro.com/#/app/endpointSecurity' },
     { type: 'keypress', timestamp: '2026-01-01T00:00:08Z', key: 'Enter', url: 'https://portal.xdr.trendmicro.com/#/app/dashboard' }
   ];
 }
@@ -78,6 +78,18 @@ describe('ActivityReporter - Summarize (T004)', () => {
     expect(summary.navFlow.length).toBe(1);
     expect(summary.navFlow[0].from).toContain('dashboard');
     expect(summary.navFlow[0].to).toContain('endpointSecurity');
+  });
+
+  test('scrollDepth aggregates max scroll per URL', () => {
+    const reporter = new ActivityReporter(createSyntheticEvents());
+    const summary = reporter.summarize();
+
+    expect(summary.scrollDepth.length).toBe(2);
+    const dashScroll = summary.scrollDepth.find(s => s.url.includes('dashboard'));
+    expect(dashScroll).toBeDefined();
+    expect(dashScroll.maxScrollPct).toBe(60);
+    const endpointScroll = summary.scrollDepth.find(s => s.url.includes('endpointSecurity'));
+    expect(endpointScroll.maxScrollPct).toBe(40);
   });
 
   test('empty events produce valid summary', () => {

@@ -30,6 +30,7 @@
 **Endgame:** Merge with v1-helper Chrome extension = one extension for passive monitoring + active automation.
 
 ### What's Next (prioritized by impact)
+- [x] T001: Fix extension loading — broken _locales symlink (old path) + duplicate manifest.json in chrome/ subfolder. Fixed: junction created, chrome/manifest.json archived.
 - [ ] **Live test on V1** — Need mcp-manager reconnected (`/mcp` → mcp-manager → Reconnect). Then: `enable` → `browser_activity action='start'` → navigate V1 pages → `browser_activity action='stop'` → `browser_activity action='report' output_path='reports/v1-test.html'`. Verify real-world data quality.
 - [ ] **Merge with v1-helper** — Rebrand and combine: activity monitoring (passive) + automation recipes (active) = one v1-helper extension
 - [ ] Extension distribution — build CRX/ZIP in `releases/`

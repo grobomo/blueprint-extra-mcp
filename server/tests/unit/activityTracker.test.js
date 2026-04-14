@@ -6,26 +6,27 @@
 const { ActivityTracker } = require('../../src/activityTracker');
 
 function createMockTransport(responses = {}) {
+  let callCount = 0;
+  // Call sequence:
+  //   start: call 1 = main inject, call 2 = iframe inject
+  //   stop:  call 3 = stop script (returns events), call 4 = iframe collection
   return {
-    sendCommand: jest.fn().mockImplementation((cmd, params) => {
-      // Default: return a value indicating script was injected
-      if (params?.params?.expression?.includes('__bpActivity')) {
-        // Stop script returns events JSON
-        if (params.params.expression.includes('active = false')) {
-          return Promise.resolve({
-            result: { value: JSON.stringify(responses.stopResult || { events: [], count: 0 }) }
-          });
-        }
-        // Iframe collection returns empty
-        if (params.params.expression.includes('allEvents')) {
-          return Promise.resolve({
-            result: { value: JSON.stringify(responses.iframeEvents || []) }
-          });
-        }
-        // Start script returns 'activity_tracker_started'
+    sendCommand: jest.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount <= 2) {
+        // start() calls — inject tracker script
         return Promise.resolve({ result: { value: 'activity_tracker_started' } });
+      } else if (callCount === 3) {
+        // stop() call 1 — stop script returns events
+        return Promise.resolve({
+          result: { value: JSON.stringify(responses.stopResult || { events: [], count: 0 }) }
+        });
+      } else {
+        // stop() call 2 — iframe event collection
+        return Promise.resolve({
+          result: { value: JSON.stringify(responses.iframeEvents || []) }
+        });
       }
-      return Promise.resolve({ result: { value: null } });
     })
   };
 }

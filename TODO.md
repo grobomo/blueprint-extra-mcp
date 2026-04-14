@@ -28,6 +28,7 @@
 - [x] T002: Fix _locales — removed default_locale, removed placeholder from git, added gitignore + validation script (PRs #32-33)
 - [x] T003: Extension distribution — `scripts/package-extension.js` builds, validates, zips to `releases/`. Test: `scripts/test/test-package-extension.sh`
 - [x] Integration tests — spec 011, 43 tests, PR #31
+- [x] T004: Post-merge verification — 119 tests pass, extension loads, packaging works. No regressions.
 
 ### Architecture (new files this session)
 ```

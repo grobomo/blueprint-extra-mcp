@@ -1,6 +1,6 @@
 # Spec 013 Tasks
 
-- [ ] T004a: Run full Jest test suite — all unit + integration tests pass
-- [ ] T004b: Run extension load validation (`scripts/test/test-extension-load.sh`)
-- [ ] T004c: Run package extension test (`scripts/test/test-package-extension.sh`)
-- [ ] T004d: Fix any regressions found
+- [x] T004a: Run full Jest test suite — 119 passed, 0 failed (12 suites)
+- [x] T004b: Run extension load validation — all checks pass
+- [x] T004c: Run package extension test — ZIP created and validated (96 files, 343 KB)
+- [x] T004d: Fix any regressions found — none found, all clean

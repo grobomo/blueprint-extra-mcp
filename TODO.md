@@ -29,6 +29,7 @@
 - [x] T003: Extension distribution — `scripts/package-extension.js` builds, validates, zips to `releases/`. Test: `scripts/test/test-package-extension.sh`
 - [x] Integration tests — spec 011, 43 tests, PR #31
 - [x] T004: Post-merge verification — 119 tests pass, extension loads, packaging works. No regressions.
+- [ ] T005: Code quality — fix scrollPct field name mismatch in test data, DRY review of tracker/reporter overlap
 
 ### Architecture (new files this session)
 ```

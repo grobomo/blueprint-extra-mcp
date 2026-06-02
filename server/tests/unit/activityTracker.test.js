@@ -6,18 +6,22 @@
 const { ActivityTracker } = require('../../src/activityTracker');
 
 function createMockTransport(responses = {}) {
-  let callCount = 0;
-  // Call sequence:
-  //   start: call 1 = main inject, call 2 = iframe inject
-  //   stop:  call 3 = stop script (returns events), call 4 = iframe collection
+  let cdpCallCount = 0;
+  // stop() now calls: getConsoleMessages, then forwardCDPCommand (stop script),
+  // then forwardCDPCommand (iframe collection)
   return {
-    sendCommand: jest.fn().mockImplementation(() => {
-      callCount++;
-      if (callCount <= 2) {
+    sendCommand: jest.fn().mockImplementation((command) => {
+      if (command === 'getConsoleMessages') {
+        // Return console messages (for cross-navigation event recovery)
+        return Promise.resolve({ messages: responses.consoleMessages || [] });
+      }
+      // forwardCDPCommand calls
+      cdpCallCount++;
+      if (cdpCallCount <= 2) {
         // start() calls — inject tracker script
         return Promise.resolve({ result: { value: 'activity_tracker_started' } });
-      } else if (callCount === 3) {
-        // stop() call 1 — stop script returns events
+      } else if (cdpCallCount === 3) {
+        // stop() call 1 — stop script returns events from current page
         return Promise.resolve({
           result: { value: JSON.stringify(responses.stopResult || { events: [], count: 0 }) }
         });
@@ -132,6 +136,52 @@ describe('ActivityTracker', () => {
     expect(result.success).toBe(false);
     expect(result.message).toContain('Connection lost');
     expect(tracker.isRecording).toBe(false);
+  });
+
+  test('stop() recovers events from console messages after page navigation', async () => {
+    // Simulate: tracker ran on page A, page navigated to B, tracker lost on page.
+    // Events from page A are in console buffer via __BP_ACTIVITY__ prefix.
+    const consoleMessages = [
+      { text: '__BP_ACTIVITY__{"type":"click","timestamp":"2026-01-01T00:00:01Z","element":{"tag":"A","text":"Link1"},"url":"https://v1.com/page1"}', level: 'log' },
+      { text: '__BP_ACTIVITY__{"type":"scroll_depth","timestamp":"2026-01-01T00:00:02Z","scrollPct":60,"url":"https://v1.com/page1"}', level: 'log' },
+      { text: 'some other console message', level: 'log' },
+      { text: '__BP_ACTIVITY__{"type":"page_dwell","timestamp":"2026-01-01T00:00:00Z","dwellMs":5000,"maxScrollPct":60,"url":"https://v1.com/page1","reason":"unload"}', level: 'log' }
+    ];
+
+    // Page has navigated — stop script returns empty (tracker not on new page)
+    const transport = createMockTransport({
+      consoleMessages,
+      stopResult: { events: [], error: 'not_active' }
+    });
+
+    await tracker.start(transport);
+    const result = await tracker.stop(transport);
+
+    expect(result.success).toBe(true);
+    expect(result.eventCount).toBe(3); // 3 __BP_ACTIVITY__ messages, 1 ignored
+    expect(result.events[0].type).toBe('page_dwell'); // sorted by timestamp
+    expect(result.events[1].type).toBe('click');
+    expect(result.events[2].type).toBe('scroll_depth');
+  });
+
+  test('stop() deduplicates events from console and page sources', async () => {
+    // Same events in both console buffer and page __bpActivity
+    const event = { type: 'click', timestamp: '2026-01-01T00:00:01Z', element: { tag: 'BUTTON', text: 'Save' } };
+    const consoleMessages = [
+      { text: '__BP_ACTIVITY__' + JSON.stringify(event), level: 'log' }
+    ];
+
+    const transport = createMockTransport({
+      consoleMessages,
+      stopResult: { events: [event], count: 1 }
+    });
+
+    await tracker.start(transport);
+    const result = await tracker.stop(transport);
+
+    expect(result.success).toBe(true);
+    expect(result.eventCount).toBe(1); // Deduped — not 2
+    expect(result.events[0].type).toBe('click');
   });
 
   test('topPages aggregation works correctly', async () => {

@@ -353,18 +353,56 @@ class ActivityTracker {
     if (!this._recording) return { success: false, message: 'Not recording' };
     this._recording = false;
 
+    const allEvents = [];
+
+    // Source 1: Console messages (survives page navigations)
+    // The tracker emits events via console.log('__BP_ACTIVITY__' + JSON.stringify(event))
+    // The extension captures these via CDP Runtime.consoleAPICalled
+    try {
+      const consoleResult = await transport.sendCommand('getConsoleMessages');
+      if (consoleResult?.messages) {
+        const PREFIX = '__BP_ACTIVITY__';
+        for (const msg of consoleResult.messages) {
+          if (msg.text && msg.text.startsWith(PREFIX)) {
+            try {
+              const event = JSON.parse(msg.text.slice(PREFIX.length));
+              event._source = 'console';
+              allEvents.push(event);
+            } catch (e) { /* malformed event, skip */ }
+          }
+        }
+        debugLog(`Collected ${allEvents.length} events from console messages`);
+      }
+    } catch (e) {
+      debugLog(`Console message collection failed: ${e.message}`);
+    }
+
+    // Source 2: Current page's __bpActivity (if tracker is still alive on this page)
     try {
       const result = await transport.sendCommand('forwardCDPCommand', {
         method: 'Runtime.evaluate',
         params: { expression: STOP_SCRIPT, returnByValue: true }
       });
 
-      let data = { events: [] };
       if (result?.result?.value) {
-        data = JSON.parse(result.result.value);
+        const data = JSON.parse(result.result.value);
+        if (data.events?.length) {
+          const consoleTimestamps = new Set(allEvents.map(e => e.timestamp));
+          for (const event of data.events) {
+            if (!consoleTimestamps.has(event.timestamp)) {
+              event._source = 'page';
+              allEvents.push(event);
+            }
+          }
+          debugLog(`Added ${data.events.length} events from current page (after dedup)`);
+        }
       }
+    } catch (e) {
+      debugLog(`Page event collection failed (page may have navigated): ${e.message}`);
+    }
 
-      // Collect from iframes
+    // Source 3: iframe events from current page
+    try {
       const iframeResult = await transport.sendCommand('forwardCDPCommand', {
         method: 'Runtime.evaluate',
         params: {
@@ -392,22 +430,31 @@ class ActivityTracker {
 
       if (iframeResult?.result?.value) {
         const iframeEvents = JSON.parse(iframeResult.result.value);
-        data.events = data.events.concat(iframeEvents);
+        const existingTimestamps = new Set(allEvents.map(e => e.timestamp));
+        for (const event of iframeEvents) {
+          if (!existingTimestamps.has(event.timestamp)) {
+            event._source = 'iframe';
+            allEvents.push(event);
+          }
+        }
       }
-
-      data.events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-      this._events = data.events;
-      debugLog(`Activity tracking stopped: ${data.events.length} events`);
-
-      return {
-        success: true,
-        eventCount: data.events.length,
-        events: data.events,
-        summary: this._summarize(data.events)
-      };
     } catch (e) {
-      return { success: false, message: 'Failed to stop: ' + e.message };
+      debugLog(`Iframe event collection failed: ${e.message}`);
     }
+
+    // Sort chronologically and clean up internal source tags
+    allEvents.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    for (const e of allEvents) delete e._source;
+
+    this._events = allEvents;
+    debugLog(`Activity tracking stopped: ${allEvents.length} events total`);
+
+    return {
+      success: true,
+      eventCount: allEvents.length,
+      events: allEvents,
+      summary: this._summarize(allEvents)
+    };
   }
 
   _summarize(events) {

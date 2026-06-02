@@ -821,6 +821,67 @@ function attachEventListeners() {
     }
     if (signInButton) signInButton.addEventListener('click', handleSignIn);
     if (logoutButton) logoutButton.addEventListener('click', handleLogout);
+
+    // V1 Helper listeners
+    const v1ImportBtn = document.getElementById('v1ImportBtn');
+    const v1FileInput = document.getElementById('v1AnalysisFileInput');
+    const v1ViewCvesBtn = document.getElementById('v1ViewCvesBtn');
+    const v1OverlayToggleBtn = document.getElementById('v1OverlayToggleBtn');
+
+    if (v1ImportBtn && v1FileInput) {
+      v1ImportBtn.addEventListener('click', () => v1FileInput.click());
+      v1FileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) importV1Analysis(file);
+        e.target.value = '';
+      });
+    }
+    if (v1ViewCvesBtn) {
+      v1ViewCvesBtn.addEventListener('click', () => {
+        state.v1ShowCveList = true;
+        state.v1CveFilter = 'all';
+        render();
+      });
+    }
+    if (v1OverlayToggleBtn) {
+      v1OverlayToggleBtn.addEventListener('click', async () => {
+        state.v1OverlayEnabled = !state.v1OverlayEnabled;
+        await browserAPI.storage.local.set({ v1h_overlay_enabled: state.v1OverlayEnabled });
+        const tabs = await browserAPI.tabs.query({ active: true, currentWindow: true });
+        if (tabs[0]) {
+          browserAPI.tabs.sendMessage(tabs[0].id, {
+            type: state.v1OverlayEnabled ? 'v1h_injectOverlays' : 'v1h_removeOverlays'
+          }).catch(() => {});
+        }
+        render();
+      });
+    }
+  }
+
+  // V1 CVE list view listeners
+  if (state.v1ShowCveList) {
+    document.querySelectorAll('.v1-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.v1CveFilter = btn.dataset.filter;
+        render();
+      });
+    });
+    const v1CopyCveIdsBtn = document.getElementById('v1CopyCveIdsBtn');
+    if (v1CopyCveIdsBtn) {
+      v1CopyCveIdsBtn.addEventListener('click', async () => {
+        const ids = getV1FilteredCves().map(e => e.cve).filter(Boolean).join('\n');
+        await navigator.clipboard.writeText(ids);
+        v1CopyCveIdsBtn.textContent = 'Copied!';
+        setTimeout(() => { v1CopyCveIdsBtn.textContent = `Copy ${getV1FilteredCves().length} CVE IDs`; }, 1500);
+      });
+    }
+    const v1CveBackBtn = document.getElementById('v1CveBackBtn');
+    if (v1CveBackBtn) {
+      v1CveBackBtn.addEventListener('click', () => {
+        state.v1ShowCveList = false;
+        render();
+      });
+    }
   }
 }
 
@@ -869,6 +930,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (changes.connectionStatus) {
           state.connectionStatus = changes.connectionStatus.newValue || null;
+          render();
+        }
+        if (changes.v1h_analysis) {
+          await loadV1AnalysisStats();
           render();
         }
       }

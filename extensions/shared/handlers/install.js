@@ -39,11 +39,17 @@ function getBrowserNameFromManifest(browserAPI) {
  */
 export function setupInstallHandler(browserAPI) {
   browserAPI.runtime.onInstalled.addListener((details) => {
-    // Only open welcome page on fresh install, not on updates or browser updates
     if (details.reason === 'install') {
+      // Open welcome page on fresh install
       const browserName = getBrowserNameFromManifest(browserAPI);
       const welcomeUrl = `${WELCOME_URL_BASE}?browser=${encodeURIComponent(browserName)}`;
       browserAPI.tabs.create({ url: welcomeUrl });
+
+      // Initialize V1 Helper defaults
+      browserAPI.storage.local.set({
+        v1h_overlay_enabled: true,
+        v1h_region: 'us-east-1',
+      });
     }
   });
 }

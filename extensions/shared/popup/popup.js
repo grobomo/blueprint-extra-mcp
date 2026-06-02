@@ -63,6 +63,15 @@ let state = {
   version: '1.0.0',
   tokenInfo: null, // Token expiration info for debug display
   tokenRefreshInterval: null, // Interval for live token checking
+  // V1 Helper state
+  v1AnalysisCount: 0,
+  v1AnalysisRelevant: 0,
+  v1AnalysisLow: 0,
+  v1AnalysisNo: 0,
+  v1OverlayEnabled: true,
+  v1ShowCveList: false,
+  v1CveFilter: 'all',
+  v1CveEntries: [],
 };
 
 // Utility: Decode JWT (without validation - only for display)
@@ -226,6 +235,151 @@ async function updateStatus() {
   render();
 }
 
+// ─── V1 Helper Functions ───
+
+async function loadV1AnalysisStats() {
+  const { v1h_analysis, v1h_overlay_enabled } = await browserAPI.storage.local.get(['v1h_analysis', 'v1h_overlay_enabled']);
+  const data = v1h_analysis || {};
+  const entries = Array.isArray(data) ? data : Object.values(data);
+
+  state.v1AnalysisCount = entries.length;
+  state.v1AnalysisRelevant = 0;
+  state.v1AnalysisLow = 0;
+  state.v1AnalysisNo = 0;
+  state.v1CveEntries = entries;
+  state.v1OverlayEnabled = v1h_overlay_enabled !== false;
+
+  for (const e of entries) {
+    const r = (e.relevant || '').toLowerCase();
+    if (r === 'yes') state.v1AnalysisRelevant++;
+    else if (r === 'low') state.v1AnalysisLow++;
+    else if (r === 'no') state.v1AnalysisNo++;
+  }
+}
+
+async function importV1Analysis(file) {
+  try {
+    const text = await file.text();
+    const json = JSON.parse(text);
+    let normalized;
+    if (Array.isArray(json)) {
+      normalized = {};
+      for (const item of json) {
+        if (item.cve) normalized[item.cve] = item;
+      }
+    } else {
+      normalized = json;
+    }
+    await browserAPI.storage.local.set({ v1h_analysis: normalized });
+    await loadV1AnalysisStats();
+    render();
+  } catch (err) {
+    console.error('[V1 Helper] Import failed:', err);
+  }
+}
+
+function getV1FilteredCves() {
+  if (state.v1CveFilter === 'all') return state.v1CveEntries;
+  return state.v1CveEntries.filter(e => (e.relevant || '').toLowerCase() === state.v1CveFilter);
+}
+
+function escPopup(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function renderV1Section() {
+  return `
+    <div class="v1-section">
+      <h3>V1 Helper — CVE Analysis</h3>
+      ${state.v1AnalysisCount > 0 ? `
+        <div class="v1-stat"><span class="v1-stat-label">CVEs loaded</span><span class="v1-stat-value">${state.v1AnalysisCount}</span></div>
+        <div class="v1-stat"><span class="v1-stat-label">Relevant</span><span class="v1-stat-value" style="color:#D71920">${state.v1AnalysisRelevant}</span></div>
+        <div class="v1-stat"><span class="v1-stat-label">Low priority</span><span class="v1-stat-value" style="color:#856404">${state.v1AnalysisLow}</span></div>
+        <div class="v1-stat"><span class="v1-stat-label">Not relevant</span><span class="v1-stat-value" style="color:#155724">${state.v1AnalysisNo}</span></div>
+      ` : `
+        <p style="font-size:12px;color:#666;margin:4px 0">No analysis loaded. Import analysis.json to see CVE overlays on V1 pages.</p>
+      `}
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="v1-import-btn" id="v1ImportBtn" style="flex:1">Import analysis.json</button>
+        ${state.v1AnalysisCount > 0 ? `
+          <button class="v1-import-btn" id="v1ViewCvesBtn" style="flex:1">View CVEs</button>
+          <button class="v1-import-btn" id="v1OverlayToggleBtn"
+            style="flex:1;background:${state.v1OverlayEnabled ? '#16a34a' : '#9ca3af'}"
+            title="${state.v1OverlayEnabled ? 'Overlays auto-inject on V1 pages' : 'Overlays disabled'}">
+            ${state.v1OverlayEnabled ? 'Overlays On' : 'Overlays Off'}
+          </button>
+        ` : ''}
+      </div>
+      <input type="file" id="v1AnalysisFileInput" style="display:none" accept=".json" />
+    </div>
+  `;
+}
+
+function renderV1CveList() {
+  const filters = [
+    { key: 'all', label: 'All', count: state.v1AnalysisCount },
+    { key: 'yes', label: 'Relevant', count: state.v1AnalysisRelevant, color: '#dc2626' },
+    { key: 'low', label: 'Low', count: state.v1AnalysisLow, color: '#ca8a04' },
+    { key: 'no', label: 'None', count: state.v1AnalysisNo, color: '#16a34a' },
+  ];
+
+  const filtered = getV1FilteredCves();
+  const relevanceColors = {
+    yes: { bg: '#fef2f2', border: '#dc2626', text: '#991b1b', label: 'RELEVANT' },
+    low: { bg: '#fefce8', border: '#ca8a04', text: '#854d0e', label: 'LOW' },
+    no:  { bg: '#f0fdf4', border: '#16a34a', text: '#166534', label: 'NOT RELEVANT' },
+  };
+
+  const rows = filtered.map(e => {
+    const r = (e.relevant || '').toLowerCase();
+    const c = relevanceColors[r] || { bg: '#f3f4f6', border: '#9ca3af', text: '#4b5563', label: r || '?' };
+    const summary = e.summary || e.action || '';
+    const truncated = summary.length > 60 ? summary.slice(0, 57) + '...' : summary;
+    return `
+      <div class="cve-row">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600;font-size:12px">${escPopup(e.cve || '')}</span>
+          <span style="padding:1px 6px;background:${c.bg};border:1px solid ${c.border};color:${c.text};
+            border-radius:8px;font-size:10px;font-weight:600">${escPopup(c.label)}</span>
+        </div>
+        ${truncated ? `<div style="font-size:11px;color:#666;margin-top:2px">${escPopup(truncated)}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="popup-container">
+      <div class="popup-header">
+        <img src="/icons/icon-32.png" alt="Blueprint Extra MCP" class="header-icon" />
+        <h1>CVE Analysis<span class="version-label">${filtered.length} of ${state.v1AnalysisCount}</span></h1>
+      </div>
+      <div class="popup-content">
+        <div style="display:flex;gap:4px;margin-bottom:8px">
+          ${filters.map(f => `
+            <button class="v1-filter-btn ${state.v1CveFilter === f.key ? 'active' : ''}"
+              data-filter="${f.key}"
+              style="flex:1;padding:4px;border:1px solid #ddd;border-radius:4px;background:${state.v1CveFilter === f.key ? '#f3f4f6' : 'white'};
+              font-size:11px;cursor:pointer${f.color && state.v1CveFilter === f.key ? ';border-color:' + f.color + ';color:' + f.color : ''}">
+              ${f.label} (${f.count})
+            </button>
+          `).join('')}
+        </div>
+        <div style="max-height:300px;overflow-y:auto">
+          ${filtered.length > 0 ? rows : '<div style="color:#999;text-align:center;padding:20px">No CVEs match this filter.</div>'}
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="v1-import-btn" id="v1CopyCveIdsBtn" style="flex:1" ${filtered.length === 0 ? 'disabled' : ''}>
+            Copy ${filtered.length} CVE ID${filtered.length !== 1 ? 's' : ''}
+          </button>
+          <button class="v1-import-btn" id="v1CveBackBtn" style="flex:1;background:#6b7280">Back</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // Load state
 async function loadState() {
   const storage = await browserAPI.storage.local.get([
@@ -253,6 +407,9 @@ async function loadState() {
   // Get version from manifest
   const manifest = browserAPI.runtime.getManifest();
   state.version = manifest.version;
+
+  // Load V1 Helper data
+  await loadV1AnalysisStats();
 
   render();
 }
@@ -323,7 +480,7 @@ function render() {
       return;
     }
 
-    const html = state.showSettings ? renderSettings() : renderMain();
+    const html = state.v1ShowCveList ? renderV1CveList() : state.showSettings ? renderSettings() : renderMain();
     log('[Popup] Rendering, HTML length:', html.length);
     root.innerHTML = html;
     log('[Popup] Root innerHTML set, checking content...');
@@ -493,6 +650,8 @@ function renderMain() {
             ${state.enabled ? 'Disable' : 'Enable'}
           </button>
         </div>
+
+        ${renderV1Section()}
 
         ${!state.isPro ? `
           <div class="pro-section">

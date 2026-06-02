@@ -3,11 +3,11 @@
 ## Session Handoff (2026-06-02 session 8)
 
 ### Current State
-- **Branch**: `main` — merged up to PR #38
+- **Branch**: `main` — merged up to PR #39
 - **gh auth**: `grobomo` (correct for this repo)
-- **Working tree**: dirty — root package.json has spurious deps from stash conflict, needs cleanup
-- **Total PRs**: 38 merged
-- **All specs complete**: 001-014 + SDK upgrade spec
+- **Working tree**: clean
+- **Total PRs**: 39 merged
+- **All specs complete**: 001-015
 - **Chrome extension**: loaded successfully in user's Chrome
 - **mcp-manager**: blueprint-extra running (31 tools, PID active)
 
@@ -22,8 +22,8 @@
 - [x] T007: Fix activity tracker cross-navigation event loss — PR #37 merged. stop() now collects from console messages (survives navigations) + page + iframes with dedup.
 - [x] T008: Upgrade MCP SDK — PR #38 merged. SDK 1.0.4 → 1.29.0. Protocol now `2025-11-25` (matches mcp-manager). 108 unit tests pass.
 - [ ] T009: Live test on V1 — BLOCKED: Trend Micro Toolbar Enterprise extension intercepts V1 sign-in page with chrome-extension:// frames, preventing Blueprint CDP attachment. User must sign in manually first, then Blueprint can operate on the authenticated V1 dashboard. Activity tracker validated on Wikipedia (hovers, dwell, report generation all work).
-- [ ] T010: Clean up git state — root package.json has spurious deps (@modelcontextprotocol/sdk, commander, sharp) from stash conflict, lock files out of sync. Fix and commit.
-- [ ] Merge with v1-helper — Rebrand and combine: activity monitoring (passive) + automation recipes (active) = one v1-helper extension.
+- [x] T010: Clean up git state — PR #39 merged. Removed spurious root deps, regenerated lock files.
+- [ ] T011: Merge v1-helper CVE overlays into Blueprint extension — Add V1 overlay content script (separate file, runs on *.trendmicro.com only), V1 section in popup (analysis import, CVE list, overlay toggle, settings), background storage init for v1h_ keys.
 
 ### Cross-Project TODOs (filed in mcp-manager)
 - **idle_timeout bug**: `config.idle_timeout || DEFAULT` should be `config.idle_timeout ?? DEFAULT` (0 means no timeout but gets treated as 1hr)
